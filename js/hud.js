@@ -14,25 +14,10 @@ const Hud = (() => {
 
   function iconFor(it) {
     if (!it) return '';
-    if (isWeapon(it)) return weaponIcon(it.w);
+    if (isWeapon(it)) return weaponIcon(it.w, it.r);
     return itemIcon(it.c);
   }
-  // compact inline SVG silhouettes
-  function weaponIcon(w) {
-    const c = WEAPONS[w].cls;
-    const P = {
-      ar: 'M4 18h30l4-3h18v6H40l-2 3h-6l-2 6h-6l2-6H14l-4 4H4z',
-      shotgun: 'M2 17h44v5H24l-2 2h-4l-2 6h-6l2-6H8l-3 3H2z M46 18h12v3H46z',
-      smg: 'M8 16h30v6H28l-1 8h-6l1-8h-8l-2 4H8z M38 17h10v3H38z',
-      pistol: 'M14 15h26v6H28l-2 9h-7l2-9h-7z',
-      sniper: 'M2 18h40l4-2h16v4H44l-2 2H26l-2 6h-6l2-6H8l-4 4H2z M16 12h18v4H16z',
-      explosive: 'M4 14h52v8H4z M18 22h6v8h-6z M8 11h8v3H8z',
-    };
-    let d = P[c] || P.ar;
-    if (w === 'minigun') d = 'M2 14h34v10H2z M36 15h24v2H36z M36 19h24v2H36z M36 23h24v1H36z M12 24h6v6h-6z';
-    if (w === 'gl') d = 'M8 14h34v8H8z M42 16h16v4H42z M14 22h8v8h-8z';
-    return `<svg viewBox="0 0 64 36"><path d="${d}" fill="currentColor"/></svg>`;
-  }
+  function weaponIcon(w, r = 0) { return Icons.weapon(w, r); }
   // drawn rounds for the ammo counters
   function ammoIcon(a) {
     const col = AMMO[a].color;
@@ -107,6 +92,11 @@ const Hud = (() => {
   function stop() { $('hud').classList.add('hidden'); for (const d of dmgNums) d.el.remove(); dmgNums.length = 0; }
 
   function buildHotbar() {
+    const mt = $('mats');
+    if (!mt.dataset.built) {
+      mt.dataset.built = 1;
+      mt.innerHTML = '<div class="mat-key"></div>' + MATS.map(m => `<div class="mat ${m.key}"><span class="mi">${Icons.mat(m.id)}</span><span class="mn">${m.name}<em>${m.hp} HP</em></span><b>0</b></div>`).join('');
+    }
     const hb = $('hotbar');
     hb.innerHTML = '';
     for (let i = 0; i <= 5; i++) {
@@ -226,7 +216,7 @@ const Hud = (() => {
         const r = i === 0 ? -1 : itemRarity(it);
         el.style.setProperty('--rc', it ? RARITY[r].color : 'rgba(255,255,255,0.15)');
         el.dataset.r = it ? r : '';
-        el.querySelector('.icon').innerHTML = i === 0 ? '<svg viewBox="0 0 64 36"><path d="M10 9c10-5 34-5 44 0l-3 4c-6-2-12-3-17-3l-5 23h-5l5-23c-5 0-11 1-16 3z" fill="currentColor"/></svg>' : iconFor(it);
+        el.querySelector('.icon').innerHTML = i === 0 ? Icons.pickaxe() : iconFor(it);
         el.querySelector('.key').textContent = Input.label(Input.binds[i === 0 ? 'pickaxe' : 'slot' + i]);
         let cnt = '';
         if (isWeapon(it)) cnt = WEAPONS[it.w].mag === 0 ? inv.ammo[WEAPONS[it.w].ammo] : it.mag;
@@ -258,12 +248,17 @@ const Hud = (() => {
     const ah = Object.keys(AMMO).filter(a => inv.ammo[a] > 0).map(a => `<div style="--ac:${AMMO[a].color}" title="${AMMO[a].name}">${ammoIcon(a)}${inv.ammo[a]}</div>`).join('');
     if (al.dataset.h !== ah) { al.innerHTML = ah; al.dataset.h = ah; }
     // mats
-    const mats = $('mats').children;
+    const mats = $('mats').querySelectorAll('.mat');
+    const building = ctl.mode !== 'combat';
     for (let i = 0; i < 3; i++) {
-      mats[i].querySelector('b').textContent = inv.mats[i];
-      mats[i].classList.toggle('sel', ctl.mode !== 'combat' && ctl.mat === i);
+      const b = mats[i].querySelector('b'), n = String(inv.mats[i]);
+      if (b.textContent !== n) b.textContent = n;
+      mats[i].classList.toggle('sel', building && ctl.mat === i);
       mats[i].classList.toggle('none', inv.mats[i] < BUILD_COST);
     }
+    $('mats').classList.toggle('building', building);
+    const mk = $('mats').querySelector('.mat-key'), mkT = `<kbd>${Input.label(Input.binds.changeMat)}</kbd> switch material`;
+    if (mk.dataset.h !== mkT) { mk.innerHTML = mkT; mk.dataset.h = mkT; }
     // build bar
     const bb = $('buildbar');
     bb.classList.toggle('hidden', ctl.mode !== 'build');

@@ -1,7 +1,7 @@
 'use strict';
 // Game constants, weapons, items, keybinds and settings.
 
-const VERSION = '1.1.0';
+const VERSION = '1.2.0';
 const NET_VER = 1;
 const S = 4;              // building grid cell size (meters)
 const WALL_T = 0.3;       // build piece thickness
@@ -93,6 +93,13 @@ const SKINS = [
   { name: 'Coral', suit: 0xff7a8a, accent: 0x24c2b8, skin: 0xf6d0b4, visor: 0x123f3c, hair: 0x7a2b1a, style: { cut: 'pony', top: 'hoodie', back: 'pack', eyes: 0x1f9a90, paint: 'blush' } },
   { name: 'Sterling', suit: 0xb9c2cc, accent: 0x2a6df0, skin: 0x6b4430, visor: 0x0e1f40, hair: 0x0f0b08, style: { cut: 'buzz', top: 'armor', back: 'tank', eyes: 0x3a2a1a } },
   { name: 'Ember', suit: 0x5a2a1a, accent: 0xff8a2a, skin: 0xe9b48e, visor: 0x3d1500, hair: 0xb8441c, style: { cut: 'mohawk', top: 'jacket', back: 'pack', eyes: 0xe0702a, paint: 'freckles' } },
+  // masked outfits
+  { name: 'Reaper', suit: 0x24212a, accent: 0xa11a2a, skin: 0xe6dcc4, visor: 0xff2a1a, hair: 0x15131a, pants: 0x18161c, style: { cut: 'hood', top: 'hoodie', back: 'scythe', mask: 'skull', glow: true } },
+  { name: 'Oni', suit: 0x2b1517, accent: 0xd8b24a, skin: 0xc79377, visor: 0xffb020, hair: 0x0e0c0c, style: { cut: 'oni', top: 'armor', back: 'blades', mask: 'oni' } },
+  { name: 'Slasher', suit: 0x3d4a36, accent: 0x7a1d1d, skin: 0xcdbba8, visor: 0x101010, hair: 0x2a2220, pants: 0x2b2f3a, style: { cut: 'shag', top: 'jacket', back: 'pack', mask: 'hockey' } },
+  { name: 'Toxin', suit: 0xd0b62a, accent: 0x2d3a2a, skin: 0x2b2f2a, visor: 0x7dff4a, hair: 0x2d3a2a, pants: 0x3a3d30, style: { cut: 'hood', top: 'vest', back: 'tank', mask: 'gas', glow: true } },
+  { name: 'Kitsune', suit: 0xefe9df, accent: 0xd8342c, skin: 0xf1d2b8, visor: 0xff6a3a, hair: 0x2a1a3a, pants: 0x2a2433, style: { cut: 'fox', top: 'jacket', back: 'blades', mask: 'fox' } },
+  { name: 'Glitch', suit: 0x16181f, accent: 0xff2bd6, skin: 0x0b0d12, visor: 0x2bf0ff, hair: 0x16181f, style: { cut: 'cyber', top: 'armor', back: 'wings', mask: 'cyber', glow: true } },
 ];
 
 const BOT_NAMES = ['Pixel', 'Nova', 'Zipline', 'Bolt', 'Mango', 'Vortex', 'Echo', 'Juniper', 'Rook', 'Quasar', 'Tango', 'Wisp', 'Comet', 'Drift', 'Fable', 'Gizmo', 'Harbor', 'Indigo', 'Jet', 'Kestrel', 'Lumen', 'Maple', 'Nimbus', 'Onyx', 'Pepper', 'Quill', 'Rally', 'Sable', 'Tundra', 'Umbra', 'Vesper', 'Willow', 'Xeno', 'Yonder', 'Zephyr', 'Atlas', 'Birch', 'Cinder', 'Dune', 'Flint', 'Grove', 'Haze', 'Ivy', 'Koda', 'Lyric', 'Marble', 'Nyx', 'Orbit', 'Pike', 'Rumble', 'Sprocket', 'Tide', 'Valor', 'Whisk', 'Yeti', 'Ziggy', 'Brisk', 'Cobalt', 'Dash', 'Ember'];
@@ -109,12 +116,12 @@ const ACTIONS = [
   { id: 'aim', label: 'Aim Down Sights', def: 'Mouse2', ctx: 'combat', group: 'Combat' },
   { id: 'reload', label: 'Reload', def: 'KeyR', ctx: 'combat', group: 'Combat' },
   { id: 'interact', label: 'Interact / Pick Up', def: 'KeyE', ctx: 'move', group: 'Combat' },
-  { id: 'pickaxe', label: 'Harvesting Tool', def: 'Digit1', ctx: 'move', group: 'Combat' },
-  { id: 'slot1', label: 'Weapon Slot 1', def: 'Digit2', ctx: 'move', group: 'Combat' },
-  { id: 'slot2', label: 'Weapon Slot 2', def: 'Digit3', ctx: 'move', group: 'Combat' },
-  { id: 'slot3', label: 'Weapon Slot 3', def: 'Digit4', ctx: 'move', group: 'Combat' },
-  { id: 'slot4', label: 'Weapon Slot 4', def: 'Digit5', ctx: 'move', group: 'Combat' },
-  { id: 'slot5', label: 'Weapon Slot 5', def: 'Digit6', ctx: 'move', group: 'Combat' },
+  { id: 'pickaxe', label: 'Harvesting Tool', def: 'KeyF', ctx: 'move', group: 'Combat' },
+  { id: 'slot1', label: 'Weapon Slot 1', def: 'Digit1', ctx: 'move', group: 'Combat' },
+  { id: 'slot2', label: 'Weapon Slot 2', def: 'Digit2', ctx: 'move', group: 'Combat' },
+  { id: 'slot3', label: 'Weapon Slot 3', def: 'Digit3', ctx: 'move', group: 'Combat' },
+  { id: 'slot4', label: 'Weapon Slot 4', def: 'Digit4', ctx: 'move', group: 'Combat' },
+  { id: 'slot5', label: 'Weapon Slot 5', def: 'Digit5', ctx: 'move', group: 'Combat' },
   { id: 'nextSlot', label: 'Next Slot', def: 'WheelDown', ctx: 'combat', group: 'Combat' },
   { id: 'prevSlot', label: 'Previous Slot', def: 'WheelUp', ctx: 'combat', group: 'Combat' },
   { id: 'drop', label: 'Drop Item', def: 'KeyT', ctx: 'combat', group: 'Combat' },
@@ -126,7 +133,7 @@ const ACTIONS = [
   { id: 'place', label: 'Place Build', def: 'Mouse0', ctx: 'build', group: 'Building' },
   { id: 'changeMat', label: 'Change Material', def: 'Mouse2', ctx: 'build', group: 'Building' },
   { id: 'rotate', label: 'Rotate Build', def: 'KeyR', ctx: 'build', group: 'Building' },
-  { id: 'edit', label: 'Edit (Start / Confirm)', def: 'KeyF', ctx: 'move', group: 'Editing' },
+  { id: 'edit', label: 'Edit (Start / Confirm)', def: 'KeyG', ctx: 'move', group: 'Editing' },
   { id: 'editSelect', label: 'Select Edit Tile', def: 'Mouse0', ctx: 'edit', group: 'Editing' },
   { id: 'resetEdit', label: 'Reset Edit', def: 'Mouse2', ctx: 'edit', group: 'Editing' },
   { id: 'map', label: 'Map', def: 'KeyM', ctx: 'move', group: 'Other' },

@@ -47,7 +47,7 @@ Items: Bandages, Med Kit, Small Shield Potion, Shield Potion, Fizz Juice (heals 
 
 ## Characters and graphics
 
-Ten outfits, each with its own hairstyle or helmet, clothing and back bling. Characters are skinned and animated in code: they run, strafe, sprint, jump, swim, skydive, glide and dance, and their hands grip each weapon through inverse kinematics. The renderer uses HDR with bloom, filmic tone mapping, colour grading and sky reflections, plus clouds you fall through, animated water, grass and soft shadows. Lower the Quality setting in Settings → Video if your computer struggles.
+Sixteen outfits, each with its own hairstyle or helmet, clothing and back bling. Six of them wear masks: Reaper (a skull with glowing eyes, a hood and a scythe), Oni (a horned demon mask and crossed swords), Slasher (a hockey mask), Toxin (a hazmat suit and glowing gas mask), Kitsune (a fox mask with ears) and Glitch (a black visor with LED eyes). The hotbar draws every weapon with its own icon, and the materials panel names each material and how strong it is. Characters are skinned and animated in code: they run, strafe, sprint, jump, swim, skydive, glide and dance, and their hands grip each weapon through inverse kinematics. The renderer uses HDR with bloom, filmic tone mapping, colour grading and sky reflections, plus clouds you fall through, animated water, grass and soft shadows. Lower the Quality setting in Settings → Video if your computer struggles.
 
 ## Default controls
 
@@ -58,11 +58,12 @@ Every key can be changed in **Settings → Keybinds**, including mouse side butt
 | Move / Jump / Sprint | W A S D / Space / Left Shift |
 | Fire / Aim | Left mouse / Right mouse |
 | Reload / Interact | R / E |
-| Harvesting tool / Slots 1–5 | 1 / 2–6 (or scroll wheel) |
+| Harvesting tool | F |
+| Slots 1–5 | 1–5 (or scroll wheel) |
 | Wall / Floor / Stairs / Roof | Q / Z / C / V |
 | Place build / Change material / Rotate stairs | Left mouse / Right mouse / R |
 | Toggle build mode | B |
-| Edit (start / confirm) | F |
+| Edit (start / confirm) | G |
 | Select edit tile / Reset edit | Left mouse / Right mouse |
 | Drop item / Emote / Map | T / N / M |
 | Menu | Esc |

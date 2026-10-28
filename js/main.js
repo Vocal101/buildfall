@@ -388,6 +388,7 @@ const Main = (() => {
   function selectSlot(i) {
     if (ctl.mode === 'edit') cancelEdit();
     if (me.slot !== i) { ctl.reloadT = 0; ctl.useT = 0; ctl.spin = 0; ctl.burstLeft = 0; ctl.fireCd = Math.max(ctl.fireCd, 0.15); }
+    if (me.slot > 0 && i === 0) ctl.lastSlot = me.slot;
     me.slot = i;
     ctl.mode = 'combat';
   }
@@ -426,7 +427,8 @@ const Main = (() => {
 
     // mode switches
     if (ground && !frozen) {
-      if (Input.hit('pickaxe')) selectSlot(0);
+      // like Fortnite: the harvesting key toggles back to the last weapon if the pickaxe is already out
+      if (Input.hit('pickaxe')) selectSlot(me.slot === 0 && ctl.mode === 'combat' && ctl.lastSlot && me.inv.s[ctl.lastSlot - 1] ? ctl.lastSlot : 0);
       for (let i = 1; i <= 5; i++) if (Input.hit('slot' + i)) selectSlot(i);
       if (ctl.mode === 'combat') { if (Input.hit('nextSlot')) cycleSlot(1); if (Input.hit('prevSlot')) cycleSlot(-1); }
       if (Input.hit('buildMode')) { if (ctl.mode === 'combat') enterBuild(ctl.piece); else if (ctl.mode === 'build') ctl.mode = 'combat'; else cancelEdit(); }

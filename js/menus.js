@@ -164,9 +164,11 @@ const Menus = (() => {
   }
 
   function locker() {
+    const hex6 = c => '#' + c.toString(16).padStart(6, '0');
+    const pics = Character.portraitAll();
     panel(`<h2>Locker</h2>
       <div class="field">Display name <input type="text" id="nm" maxlength="16" value="${U.esc(SETTINGS.name)}"></div>
-      <div class="skins">${SKINS.map((s, i) => `<button class="skin ${i === SETTINGS.skin ? 'on' : ''}" data-i="${i}"><i style="background:linear-gradient(135deg,#${s.suit.toString(16).padStart(6, '0')} 55%,#${s.accent.toString(16).padStart(6, '0')} 55%)"></i><span>${s.name}</span></button>`).join('')}</div>
+      <div class="skins">${SKINS.map((s, i) => `<button class="skin ${i === SETTINGS.skin ? 'on' : ''}${s.style && s.style.mask ? ' masked' : ''}" data-i="${i}"><i style="--c1:${hex6(s.suit)};--c2:${hex6(s.accent)}">${pics[i] ? `<img src="${pics[i]}" alt="">` : ''}</i><span>${s.name}</span></button>`).join('')}</div>
       <div class="actions">${btn('back', 'Done', 'primary')}</div>`, 'narrow locker');
     $('nm').oninput = e => { const v = e.target.value.trim().slice(0, 16); if (v) { SETTINGS.name = v; saveSettings(); } };
     root.querySelectorAll('.skin').forEach(b => b.onclick = () => {
