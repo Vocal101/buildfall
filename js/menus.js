@@ -196,7 +196,7 @@ const Menus = (() => {
     const L = a => `<kbd>${Input.label(Input.binds[a])}</kbd>`;
     panel(`<h2>How to Play</h2>
       <div class="help">
-        <div><h4>Moving</h4><p>${L('forward')}${L('left')}${L('back')}${L('right')} move, ${L('jump')} jump, ${L('sprint')} sprint. On the blimp, press ${L('jump')} to jump out. While skydiving, press ${L('jump')} to open your glider early.</p></div>
+        <div><h4>Moving</h4><p>${L('forward')}${L('left')}${L('back')}${L('right')} move, ${L('jump')} jump, ${L('sprint')} sprint. On the blimp, press ${L('jump')} to jump out. You free fall first: hold ${L('forward')} to dive faster and press ${L('jump')} to open your glider. It opens by itself ${PH.AUTO_GLIDE} m above the ground. Falls of more than two storeys on foot cause damage.</p></div>
         <div><h4>Fighting</h4><p>${L('fire')} fire, ${L('aim')} aim, ${L('reload')} reload. ${L('pickaxe')} is your harvesting tool; ${L('slot1')}–${L('slot5')} pick inventory slots. ${L('interact')} picks up loot and opens chests. Hit the glowing weak points when harvesting for bonus damage.</p></div>
         <div><h4>Building</h4><p>${L('wall')} wall, ${L('floor')} floor, ${L('ramp')} stairs, ${L('cone')} roof. ${L('place')} places the piece, and holding it builds continuously. ${L('changeMat')} switches between wood, brick and metal. ${L('rotate')} rotates stairs. Every piece snaps to the grid and must touch the ground or another build.</p></div>
         <div><h4>Editing</h4><p>Aim at your build and press ${L('edit')}. Click or drag across tiles to cut doors, windows and arches. ${L('resetEdit')} resets the piece. Releasing confirms the edit (you can turn that off in Settings). On stairs, drag across tiles to change their direction.</p></div>

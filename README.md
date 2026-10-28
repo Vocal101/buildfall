@@ -14,7 +14,7 @@ If you use git, run `git clone https://github.com/Vocal101/buildfall.git` and op
 
 ## Modes
 
-- **Battle Royale.** Up to 60 players (you plus bots). Ride the Battle Blimp across the island and jump whenever you like. Skydive, open your glider, and land in one of ten towns. Open chests and ammo boxes, pick up floor loot, and harvest trees, rocks, cars and houses for materials. The storm closes in over seven phases, and the last player standing wins.
+- **Battle Royale.** Up to 60 players (you plus bots). Ride the Battle Blimp across the island and jump whenever you like. Free fall from 245 m (hold forward to dive faster), open your glider when you choose, or let it open by itself 45 m above the ground, and land in one of ten towns. Falls of more than two storeys on foot cause damage. Open chests and ammo boxes, pick up floor loot, and harvest trees, rocks, cars and houses for materials. The storm closes in over seven phases, and the last player standing wins.
 - **1v1 Build Fight.** You and an opponent start with full health and shields, a Legendary Assault Rifle, Pump Shotgun and SMG, grenades, shield potions and a stack of materials. Win a round by eliminating the other player. The zone closes after 40 seconds. Play first to 3, 5 or 7.
 - **Play Online.** One player hosts a room and shares the 5-letter code, and friends type it in to join. Hosts can run Battle Royale with up to 16 people (plus bots to fill the lobby) or a 1v1 build fight. Connections are peer-to-peer through WebRTC, and the host's computer runs the match.
 
@@ -41,9 +41,13 @@ Twenty weapons across **six rarities**: Common, Uncommon, Rare, Epic, Legendary 
 | Explosives | Rocket Launcher, Grenade Launcher |
 | Mythic (rare chest drops) | Tempest Rifle, Dragonbreath Pump, Skybreaker |
 
-Snipers fire bullets that travel and drop over distance. Shotguns reload one shell at a time, and you can fire again mid-reload. Headshots do extra damage, bloom grows while you spray, and the first shot is accurate if you're standing still and aiming.
+Every shot draws a tracer streak that flies from the muzzle, guns throw spent casings, and snipers fire bullets that travel and drop over distance. Shotguns reload one shell at a time, and you can fire again mid-reload. Headshots do extra damage, bloom grows while you spray, and the first shot is accurate if you're standing still and aiming.
 
 Items: Bandages, Med Kit, Small Shield Potion, Shield Potion, Fizz Juice (heals over time), Mega Jug (full health and shields), Grenades and Bounce Pads.
+
+## Characters and graphics
+
+Ten outfits, each with its own hairstyle or helmet, clothing and back bling. Characters are skinned and animated in code: they run, strafe, sprint, jump, swim, skydive, glide and dance, and their hands grip each weapon through inverse kinematics. The renderer uses HDR with bloom, filmic tone mapping, colour grading and sky reflections, plus clouds you fall through, animated water, grass and soft shadows. Lower the Quality setting in Settings → Video if your computer struggles.
 
 ## Default controls
 

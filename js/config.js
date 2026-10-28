@@ -1,7 +1,7 @@
 'use strict';
 // Game constants, weapons, items, keybinds and settings.
 
-const VERSION = '1.0.0';
+const VERSION = '1.1.0';
 const NET_VER = 1;
 const S = 4;              // building grid cell size (meters)
 const WALL_T = 0.3;       // build piece thickness
@@ -83,16 +83,16 @@ const VAULT_RARITY = [0, 0, 25, 40, 30, 5];
 const POI_NAMES = ['Pinewood Hollow', 'Rustwater Docks', 'Sunspire Heights', 'Mossbrook Mills', 'Crater Yard', 'Driftwood Bay', 'Lumberjack Lot', 'Hilltop Keep', 'Copper Canyon', 'Breezy Acres', 'Fable Fields', 'Stormwatch Point'];
 
 const SKINS = [
-  { name: 'Ranger', suit: 0x2f6fd6, accent: 0xffc53d, skin: 0xf1c7a1, visor: 0x1b2b44, hair: 0x3a2618 },
-  { name: 'Blaze', suit: 0xd8402f, accent: 0x2b2b30, skin: 0xd9a27b, visor: 0x2b1010, hair: 0x15110f },
-  { name: 'Frostbyte', suit: 0x7fd3ff, accent: 0xffffff, skin: 0xffe0c4, visor: 0x1a4a66, hair: 0xe8f6ff },
-  { name: 'Mossback', suit: 0x4f8f3a, accent: 0x8b5a2b, skin: 0xa8734f, visor: 0x203315, hair: 0x2a1a0a },
-  { name: 'Nebula', suit: 0x7a4dff, accent: 0xff5ed2, skin: 0xf3c9b0, visor: 0x200a40, hair: 0xff8ad8 },
-  { name: 'Sunny', suit: 0xffb020, accent: 0xff5a36, skin: 0x8d5a3b, visor: 0x3a1e00, hair: 0x1a0d05 },
-  { name: 'Nightshade', suit: 0x22252e, accent: 0x40ffb0, skin: 0xc79377, visor: 0x00ffaa, hair: 0x0a0a0a },
-  { name: 'Coral', suit: 0xff7a8a, accent: 0x24c2b8, skin: 0xf6d0b4, visor: 0x123f3c, hair: 0x7a2b1a },
-  { name: 'Sterling', suit: 0xb9c2cc, accent: 0x2a6df0, skin: 0x6b4430, visor: 0x0e1f40, hair: 0x0f0b08 },
-  { name: 'Ember', suit: 0x5a2a1a, accent: 0xff8a2a, skin: 0xe9b48e, visor: 0x3d1500, hair: 0xb8441c },
+  { name: 'Ranger', suit: 0x2f6fd6, accent: 0xffc53d, skin: 0xf1c7a1, visor: 0x1b2b44, hair: 0x3a2618, style: { cut: 'swoop', top: 'jacket', back: 'pack', eyes: 0x3b7fd6 } },
+  { name: 'Blaze', suit: 0xd8402f, accent: 0x2b2b30, skin: 0xd9a27b, visor: 0x2b1010, hair: 0x15110f, style: { cut: 'spiky', top: 'vest', back: 'tank', eyes: 0xd98a1c, paint: 'stripes' } },
+  { name: 'Frostbyte', suit: 0x7fd3ff, accent: 0xffffff, skin: 0xffe0c4, visor: 0x1a4a66, hair: 0xe8f6ff, style: { cut: 'beanie', top: 'hoodie', back: 'pack', eyes: 0x6ac8ff, paint: 'freckles' } },
+  { name: 'Mossback', suit: 0x4f8f3a, accent: 0x8b5a2b, skin: 0xa8734f, visor: 0x203315, hair: 0x2a1a0a, style: { cut: 'cap', top: 'vest', back: 'pack', eyes: 0x5a8a3a } },
+  { name: 'Nebula', suit: 0x7a4dff, accent: 0xff5ed2, skin: 0xf3c9b0, visor: 0x200a40, hair: 0xff8ad8, style: { cut: 'bun', top: 'armor', back: 'wings', eyes: 0xb05cff, paint: 'star', glow: true } },
+  { name: 'Sunny', suit: 0xffb020, accent: 0xff5a36, skin: 0x8d5a3b, visor: 0x3a1e00, hair: 0x1a0d05, style: { cut: 'curly', top: 'jacket', back: 'board', eyes: 0x5a3010 } },
+  { name: 'Nightshade', suit: 0x22252e, accent: 0x40ffb0, skin: 0xc79377, visor: 0x00ffaa, hair: 0x0a0a0a, style: { cut: 'helmet', top: 'armor', back: 'tank', eyes: 0x1fe0a0, glow: true } },
+  { name: 'Coral', suit: 0xff7a8a, accent: 0x24c2b8, skin: 0xf6d0b4, visor: 0x123f3c, hair: 0x7a2b1a, style: { cut: 'pony', top: 'hoodie', back: 'pack', eyes: 0x1f9a90, paint: 'blush' } },
+  { name: 'Sterling', suit: 0xb9c2cc, accent: 0x2a6df0, skin: 0x6b4430, visor: 0x0e1f40, hair: 0x0f0b08, style: { cut: 'buzz', top: 'armor', back: 'tank', eyes: 0x3a2a1a } },
+  { name: 'Ember', suit: 0x5a2a1a, accent: 0xff8a2a, skin: 0xe9b48e, visor: 0x3d1500, hair: 0xb8441c, style: { cut: 'mohawk', top: 'jacket', back: 'pack', eyes: 0xe0702a, paint: 'freckles' } },
 ];
 
 const BOT_NAMES = ['Pixel', 'Nova', 'Zipline', 'Bolt', 'Mango', 'Vortex', 'Echo', 'Juniper', 'Rook', 'Quasar', 'Tango', 'Wisp', 'Comet', 'Drift', 'Fable', 'Gizmo', 'Harbor', 'Indigo', 'Jet', 'Kestrel', 'Lumen', 'Maple', 'Nimbus', 'Onyx', 'Pepper', 'Quill', 'Rally', 'Sable', 'Tundra', 'Umbra', 'Vesper', 'Willow', 'Xeno', 'Yonder', 'Zephyr', 'Atlas', 'Birch', 'Cinder', 'Dune', 'Flint', 'Grove', 'Haze', 'Ivy', 'Koda', 'Lyric', 'Marble', 'Nyx', 'Orbit', 'Pike', 'Rumble', 'Sprocket', 'Tide', 'Valor', 'Whisk', 'Yeti', 'Ziggy', 'Brisk', 'Cobalt', 'Dash', 'Ember'];

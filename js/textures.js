@@ -184,6 +184,33 @@ const Tex = (() => {
     g.fillStyle = rg; g.beginPath(); g.arc(0, 0, 30, 0, 7); g.fill();
     return c;
   }
+  // muzzle flame: bright at the barrel (bottom of the canvas), tapering to a ragged tip
+  function flame() {
+    const c = canvas(64, 128), g = c.getContext('2d');
+    const R = rnd(77);
+    for (let k = 0; k < 3; k++) {
+      const w = [26, 18, 9][k], col = ['rgba(255,150,40,0.55)', 'rgba(255,210,110,0.8)', 'rgba(255,255,235,1)'][k];
+      g.fillStyle = col; g.beginPath(); g.moveTo(32 - w, 128);
+      for (let i = 0; i <= 8; i++) g.lineTo(32 - w * (1 - i / 9) * (0.8 + R() * 0.4), 128 - i * 14);
+      g.lineTo(32, 8 + k * 22);
+      for (let i = 8; i >= 0; i--) g.lineTo(32 + w * (1 - i / 9) * (0.8 + R() * 0.4), 128 - i * 14);
+      g.closePath(); g.fill();
+    }
+    return c;
+  }
+  // soft cumulus puff for sky clouds
+  function cloud() {
+    const c = canvas(256, 256), g = c.getContext('2d');
+    const R = rnd(5);
+    for (let i = 0; i < 26; i++) {
+      const a = R() * 6.28, r = R() * 70, x = 128 + Math.cos(a) * r * 1.2, y = 140 + Math.sin(a) * r * 0.55, s = 30 + R() * 45;
+      const rg = g.createRadialGradient(x, y - s * 0.2, 0, x, y, s);
+      const sh = Math.round(228 + R() * 27);
+      rg.addColorStop(0, `rgba(${sh},${sh},${Math.min(255, sh + 6)},0.85)`); rg.addColorStop(0.6, 'rgba(232,238,250,0.45)'); rg.addColorStop(1, 'rgba(232,238,250,0)');
+      g.fillStyle = rg; g.beginPath(); g.arc(x, y, s, 0, 7); g.fill();
+    }
+    return c;
+  }
   function beam() {
     const c = canvas(64, 256), g = c.getContext('2d');
     const gr = g.createLinearGradient(0, 256, 0, 0);
@@ -215,6 +242,8 @@ const Tex = (() => {
       case 'glow': t = mk(glow(), true, false); break;
       case 'flash': t = mk(flash(), true, false); break;
       case 'beam': t = mk(beam(), true, false); break;
+      case 'flame': t = mk(flame(), true, false); break;
+      case 'cloud': t = mk(cloud(), true, false); break;
     }
     cache[name] = t;
     return t;

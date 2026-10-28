@@ -84,17 +84,13 @@ const Main = (() => {
   }
   function placeMenuAvatar() {
     if (menuAvatar) Render.scene.remove(menuAvatar.root);
-    menuAvatar = Models.avatar(SETTINGS.skin);
+    menuAvatar = Character.create(SETTINGS.skin);
     const sp = menuSpot();
     menuAvatar.spot = sp;
     menuAvatar.root.position.set(sp.x, sp.y, sp.z);
-    const gun = Models.gun('ar', 4);
-    menuAvatar.gunMount.add(gun);
-    menuAvatar.armR.rotation.set(-1.2, 0, 0.1); menuAvatar.armL.rotation.set(-1.15, 0.6, 0);
-    menuAvatar.gunMount.position.set(0.12, 0.3, -0.32);
-    gun.rotation.set(0.3, 0.55, 0.5);
-    menuAvatar.root.traverse(o => { if (o.isMesh) o.castShadow = true; });
+    Character.setHeld(menuAvatar, 'w:ar:4', Models.gun('ar', 4));
     Render.scene.add(menuAvatar.root);
+    for (let i = 0; i < 40; i++) animateMenuAvatar(1 / 30);
   }
 
   // ---------- match start ----------
@@ -219,9 +215,13 @@ const Main = (() => {
         const mz = muzzleOf(p);
         const st = WEAPONS[ev.w];
         Sfx.play('shot', mz, { s: st ? st.sound : 'rifle' });
-        FX.muzzle(mz, 0.6);
+        const e0 = ev.e[0];
+        const md = e0 ? { x: e0[0] - mz.x, y: e0[1] - mz.y, z: e0[2] - mz.z } : null;
+        if (md) { const l = Math.hypot(md.x, md.y, md.z) || 1; md.x /= l; md.y /= l; md.z /= l; }
+        FX.muzzle(mz, st && st.cls === 'shotgun' ? 0.9 : 0.6, md);
+        if (st) ejectCasing(p, st);
         for (const e of ev.e) {
-          FX.tracer(mz, { x: e[0], y: e[1], z: e[2] }, 0xfff0b8, 0.05, 0.09);
+          FX.tracer(mz, { x: e[0], y: e[1], z: e[2] }, 0xfff0b8, 0.05, ev.e.length > 1);
           if (e[3]) FX.impact({ x: e[0], y: e[1], z: e[2] }, { x: 0, y: 1, z: 0 }, e[3] === 1 ? 'player' : e[3] === 2 ? 'terrain' : 'piece');
           // near-miss whiz
           if (me && me.alive) {
@@ -271,14 +271,19 @@ const Main = (() => {
     }
   }
 
+  // spent brass flies out of the ejection port
+  function ejectCasing(p, st) {
+    const a = Render.avatar(p.id);
+    if (!a || !a.root.visible || !a.heldMesh || a.heldMesh.userData.eject > 50) return;
+    const cp = Render.camera.position;
+    if (Math.abs(p.rx - cp.x) > 45 || Math.abs(p.rz - cp.z) > 45) return;
+    const ep = Character.ejectPort(a);
+    if (ep) FX.casing(ep.p, ep.r, st.cls === 'shotgun' ? 'shell' : st.cls === 'sniper' ? 'big' : 'brass', p.ry);
+  }
   function muzzleOf(p) {
     const a = Render.avatar(p.id);
-    if (a && a.heldMesh && a.root.visible) {
-      a.root.updateMatrixWorld(true);
-      const v = new THREE.Vector3(0, 0.03, a.heldMesh.userData.muzzle || -0.6);
-      a.heldMesh.localToWorld(v);
-      return { x: v.x, y: v.y, z: v.z };
-    }
+    const v = a && Character.muzzle(a);
+    if (v) return { x: v.x, y: v.y, z: v.z };
     return { x: p.rx, y: p.ry + 1.4, z: p.rz };
   }
 
@@ -435,6 +440,7 @@ const Main = (() => {
       inp.mz = (Input.held('forward') ? 1 : 0) - (Input.held('back') ? 1 : 0);
       inp.mx = (Input.held('right') ? 1 : 0) - (Input.held('left') ? 1 : 0);
       inp.jump = Input.held('jump');
+      inp.jumpP = Input.hit('jump');
       inp.sprint = SETTINGS.autoSprint ? !Input.held('sprint') : Input.held('sprint');
     }
     if (inp.mx || inp.mz || inp.jump) ctl.emoteT = 0;
@@ -461,11 +467,17 @@ const Main = (() => {
     if (G.duel && G.duel.state === 'countdown') return;
     const wasState = me.state;
     const ev = Phys.step(G, me, inp, dt);
+    inp.jumpP = false; // a press is used by one physics step only
     if (ev.jumped) Sfx.play('jump');
     if (ev.landed) { Sfx.play('land'); FX.dust({ x: me.x, y: me.y, z: me.z }, wasState === 'glide' ? 14 : 6); }
-    if (ev.glide) Sfx.play('glide');
+    if (ev.glide || ev.unglide) Sfx.play('glide');
     if (ev.bounce) Sfx.play('bounce', me);
-    if (ev.fall) act({ a: 'fall', dmg: ev.fall });
+    if (ev.fall) {
+      act({ a: 'fall', dmg: ev.fall });
+      shake = Math.max(shake, Math.min(1.2, 0.3 + ev.fall / 60));
+      FX.dust({ x: me.x, y: me.y, z: me.z }, 18);
+    }
+
     // footsteps
     const sp = Math.hypot(me.vx, me.vz);
     if (me.onGround && sp > 2) {
@@ -619,8 +631,10 @@ const Main = (() => {
     }
     if (!host) Inv.consumeShot(me, me.slot);
     act({ a: 'fire', s: me.slot, o: [o.x, o.y, o.z], d: dirs });
-    for (const e of ends) FX.tracer(mz, e, 0xfff0b8, n > 1 ? 0.04 : 0.06, 0.1);
-    FX.muzzle(mz, st.cls === 'shotgun' ? 1.0 : st.cls === 'sniper' ? 1.2 : 0.7);
+    for (const e of ends) FX.tracer(mz, e, 0xfff0b8, n > 1 ? 0.045 : 0.06, n > 1);
+    FX.muzzle(mz, st.cls === 'shotgun' ? 1.0 : st.cls === 'sniper' ? 1.2 : 0.7, { x: fwd.x, y: fwd.y, z: fwd.z });
+    ejectCasing(me, st);
+
     Sfx.play('shot', null, { s: st.sound });
     me.fireAnim = 1;
     ctl.bloom = Math.min(st.bloomMax || 0.05, ctl.bloom + (st.bloom || 0.01));
@@ -889,7 +903,7 @@ const Main = (() => {
       if (camY === null || Math.abs(camY - subject.ry) > 3) camY = subject.ry;
       camY += (subject.ry - camY) * Math.min(1, dt * 20);
       target = new THREE.Vector3(subject.rx, camY + 1.55, subject.rz);
-      if (subject.state === 'sky') { dist = 6.5; right = 0; up = 1; }
+      if (subject.state === 'sky') { dist = 6.5 + (subject.dive || 0) * 1.5; right = 0; up = 1; fovH = SETTINGS.fov + (subject.dive || 0) * 12; }
       else if (subject.state === 'glide') { dist = 6; right = 0; up = 1.4; }
       else if (ctl.mode === 'build') { dist = 3.7; }
       if (subject === me && ctl.ads && isWeapon(it)) {
@@ -928,6 +942,7 @@ const Main = (() => {
     }
     const targetFov = vfov(fovH);
     cam.fov += (targetFov - cam.fov) * Math.min(1, dt * 14);
+    if (window.T && T.camOv) { const o = T.camOv; cam.position.set(o.p[0], o.p[1], o.p[2]); cam.lookAt(o.l[0], o.l[1], o.l[2]); cam.fov = o.fov || 40; view.hideLocal = !!o.hide; }
     cam.updateProjectionMatrix();
     view.focus = target;
     const s = G.storm;
@@ -1011,6 +1026,7 @@ const Main = (() => {
       if (h && (ctl.mode !== 'combat' || h.piece.hp < h.piece.max || me.slot === 0)) ctl.aimPiece = h.piece;
     }
     FX.stormSpecks(Render.camera.position, G.storm);
+    if (me.alive && me.state === 'sky') FX.wind(Render.camera.position, -me.vy, dt);
     Render.frame(dt, view);
     Hud.update(dt, ctl);
   }
@@ -1037,6 +1053,12 @@ const Main = (() => {
     }
   }
 
+  const menuAnim = { state: 'ground', code: 'w:ar:4', flags: 0, pitch: 0, yaw: 0, vx: 0, vz: 0, onGround: true, swing: 1, fire: 0, time: 0, menu: true };
+  function animateMenuAvatar(dt) {
+    menuAnim.time = menuT; menuAnim.yaw = menuAvatar.root.rotation.y; menuAnim.pitch = -0.12 + Math.sin(menuT * 0.5) * 0.05;
+    menuAnim.lookYaw = Math.sin(menuT * 0.7) * 0.25;
+    Character.animate(menuAvatar, menuAnim, dt);
+  }
   // menu: slow orbit over the island with the player's character
   function menuFrame(dt) {
     menuT += dt;
@@ -1051,9 +1073,7 @@ const Main = (() => {
     cam.lookAt(look);
     cam.rotateY(0.34);
     menuAvatar.root.rotation.y = Math.atan2(-dx, -dz) + 0.35;
-    menuAvatar.head.rotation.y = Math.sin(menuT * 0.7) * 0.2;
-    menuAvatar.torso.rotation.z = Math.sin(menuT * 1.3) * 0.02;
-    menuAvatar.root.position.y = sp.y + Math.sin(menuT * 2) * 0.01;
+    animateMenuAvatar(dt);
     Render.frame(dt, { focus: look, localId: -1 });
   }
 
@@ -1084,6 +1104,35 @@ const Main = (() => {
       },
       // drive frames by hand (the preview pane throttles requestAnimationFrame when hidden)
       frames(n = 1, dt = 1 / 60) { for (let i = 0; i < n; i++) { try { if (state === 'game' && G) gameFrame(dt); else menuFrame(dt); } catch (e) { T.errs.push(String(e.stack || e)); break; } Input.endFrame(); } return T.errs.length ? T.errs.slice(-2) : 'ok'; },
+      // pose lab: line up characters in front of the camera, facing it
+      lab(list, dist = 4, gap = 1.4) {
+        for (const a of T._lab || []) Render.scene.remove(a.root);
+        T._lab = [];
+        const fx = -Math.sin(ctl.yaw), fz = -Math.cos(ctl.yaw), rx = Math.cos(ctl.yaw), rz = -Math.sin(ctl.yaw);
+        list.forEach((o, i) => {
+          const a = Character.create(o.skin || 0);
+          const code = o.code || '';
+          if (code) Character.setHeld(a, code, code === 'pick' ? Models.pickaxe() : code.startsWith('w:') ? Models.gun(code.split(':')[1], +code.split(':')[2]) : Models.item(code.slice(2)));
+          const off = (i - (list.length - 1) / 2) * gap;
+          const x = me.x + fx * dist + rx * off, z = me.z + fz * dist + rz * off;
+          const yaw = ctl.yaw + Math.PI + (o.turn || 0);
+          a.root.position.set(x, (o.y || 0) + me.y, z);
+          a.root.rotation.y = yaw;
+          Render.scene.add(a.root);
+          const s = { state: o.state || 'ground', code, flags: o.flags || 0, pitch: o.pitch || 0, yaw, vx: -Math.sin(yaw) * (o.run || 0) + Math.cos(yaw) * (o.strafe || 0), vz: -Math.cos(yaw) * (o.run || 0) - Math.sin(yaw) * (o.strafe || 0), onGround: !o.air, swim: !!o.swim, swing: o.swing === undefined ? 1 : o.swing, fire: 0, time: 0, dive: o.dive || 0, menu: !!o.menu };
+          for (let k = 0; k < 90; k++) { s.time = k / 60 + (o.t || 0); a.lastYaw = yaw; Character.animate(a, s, 1 / 60); }
+          if (o.walk !== undefined) { a.walk = o.walk; Character.animate(a, s, 1 / 60); }
+          T._lab.push(a);
+        });
+        return T._lab.length;
+      },
+      // frame lab character i from the front (ang turns around it, h = look height)
+      closeup(i = 0, dist = 1.6, h = 1.5, ang = 0, fov = 40) {
+        const a = T._lab[i]; if (!a) return 'none';
+        const y = a.root.rotation.y + ang, p = a.root.position;
+        T.camOv = { p: [p.x - Math.sin(y) * dist, p.y + h, p.z - Math.cos(y) * dist], l: [p.x, p.y + h, p.z], fov, hide: true };
+        return 'ok';
+      },
       lock: () => Input.lock(),
       fakeLock() { Object.defineProperty(document, 'pointerLockElement', { get: () => document.getElementById('game'), configurable: true }); },
     };

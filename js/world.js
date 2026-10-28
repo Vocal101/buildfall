@@ -298,7 +298,7 @@ const World = (() => {
     const ang = R() * Math.PI * 2, off = R.range(-70, 70);
     const dx = Math.cos(ang), dz = Math.sin(ang);
     const nx = -dz, nz = dx;
-    W.bus = { ax: -dx * 420 + nx * off, az: -dz * 420 + nz * off, bx: dx * 420 + nx * off, bz: dz * 420 + nz * off, y: 150, speed: 30 };
+    W.bus = { ax: -dx * 420 + nx * off, az: -dz * 420 + nz * off, bx: dx * 420 + nx * off, bz: dz * 420 + nz * off, y: 245, speed: 30 };
     W.bus.len = Math.hypot(W.bus.bx - W.bus.ax, W.bus.bz - W.bus.az);
     return W;
   }

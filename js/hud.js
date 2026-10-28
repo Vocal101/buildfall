@@ -33,6 +33,18 @@ const Hud = (() => {
     if (w === 'gl') d = 'M8 14h34v8H8z M42 16h16v4H42z M14 22h8v8h-8z';
     return `<svg viewBox="0 0 64 36"><path d="${d}" fill="currentColor"/></svg>`;
   }
+  // drawn rounds for the ammo counters
+  function ammoIcon(a) {
+    const col = AMMO[a].color;
+    const round = (x, w, caseH, tipH) => `<rect x="${x}" y="${24 - caseH}" width="${w}" height="${caseH}" rx="1" fill="#d9a640"/><rect x="${x}" y="${24 - caseH}" width="${w * 0.35}" height="${caseH}" fill="#f3cf72"/><rect x="${x - 0.6}" y="22.4" width="${w + 1.2}" height="1.6" fill="#a87a2a"/><path d="M${x} ${24 - caseH}Q${x} ${24 - caseH - tipH * 0.75} ${x + w / 2} ${24 - caseH - tipH}Q${x + w} ${24 - caseH - tipH * 0.75} ${x + w} ${24 - caseH}z" fill="#c8703a"/><rect x="${x}" y="${24 - caseH + 1}" width="${w}" height="1.6" fill="${col}"/>`;
+    let body;
+    if (a === 'shells') body = '<rect x="3" y="6" width="10" height="13" rx="1.5" fill="#d23a32"/><rect x="3" y="6" width="3" height="13" fill="#ef6a5e"/><rect x="2.4" y="18" width="11.2" height="6" rx="1" fill="#d9a640"/><rect x="3" y="9" width="10" height="1.6" fill="' + col + '"/>';
+    else if (a === 'rockets') body = '<path d="M8 1l3.5 6v12h-7V7z" fill="#5d6672"/><path d="M8 1l3.5 6h-7z" fill="#e8402a"/><path d="M4.5 15l-3 5h3zM11.5 15l3 5h-3z" fill="#e8402a"/><rect x="4.5" y="8" width="7" height="1.6" fill="' + col + '"/><rect x="6" y="19" width="4" height="3" fill="#ffb03a"/>';
+    else if (a === 'heavy') body = round(3.5, 9, 13, 8);
+    else if (a === 'medium') body = round(4.5, 7, 12, 7);
+    else body = round(5.5, 5, 9, 5);
+    return `<svg class="ammo-ic" viewBox="0 0 16 24">${body}</svg>`;
+  }
   function itemIcon(c) {
     const I = {
       bandage: '<circle cx="32" cy="18" r="11" fill="#f4f1ea"/><rect x="21" y="15" width="22" height="6" fill="#d8b48a"/>',
@@ -243,7 +255,8 @@ const Hud = (() => {
     } else ar.classList.add('hidden');
     // ammo reserve list
     const al = $('ammo-list');
-    al.innerHTML = Object.keys(AMMO).filter(a => inv.ammo[a] > 0).map(a => `<div style="--ac:${AMMO[a].color}"><i></i>${inv.ammo[a]}</div>`).join('');
+    const ah = Object.keys(AMMO).filter(a => inv.ammo[a] > 0).map(a => `<div style="--ac:${AMMO[a].color}" title="${AMMO[a].name}">${ammoIcon(a)}${inv.ammo[a]}</div>`).join('');
+    if (al.dataset.h !== ah) { al.innerHTML = ah; al.dataset.h = ah; }
     // mats
     const mats = $('mats').children;
     for (let i = 0; i < 3; i++) {
@@ -307,6 +320,23 @@ const Hud = (() => {
       const opp = ids.find(i => i !== lid);
       const D = G.duel;
       si.innerHTML = `<span class="sc me">${D.scores[lid] || 0}</span><span class="vs">ROUND ${D.round} · FIRST TO ${D.to}</span><span class="sc opp">${D.scores[opp] || 0}</span>`;
+    }
+    // skydive altimeter
+    const alt = $('alt');
+    const flying = me.alive && (me.state === 'sky' || me.state === 'glide');
+    alt.classList.toggle('hidden', !flying);
+    if (flying) {
+      const h = Math.max(0, me.alt !== undefined ? me.alt : me.y - G.T.h(me.x, me.z));
+      const top = 260, H = 260;
+      alt.querySelector('.me').style.bottom = (U.clamp(h / top, 0, 1) * H) + 'px';
+      alt.querySelector('.mark').style.bottom = (PH.AUTO_GLIDE / top * H) + 'px';
+      alt.querySelector('.lbl b').textContent = Math.round(h);
+      const K = a => `<span class="k">${Input.label(Input.binds[a])}</span>`;
+      let tip;
+      if (me.state === 'sky') tip = `${K('jump')} open glider<br>${K('forward')} dive faster`;
+      else tip = h > PH.AUTO_GLIDE + PH.REDEPLOY ? `${K('jump')} close glider` : 'Gliding';
+      const tipEl = alt.querySelector('.tip');
+      if (tipEl.dataset.t !== tip) { tipEl.innerHTML = tip; tipEl.dataset.t = tip; }
     }
     // storm distance warning
     const sw = $('storm-warn');

@@ -13,10 +13,10 @@ const Render = (() => {
 
   // ---------- init ----------
   function init(canvas) {
-    renderer = new THREE.WebGLRenderer({ canvas, antialias: true, powerPreference: 'high-performance', stencil: false, preserveDrawingBuffer: location.search.includes('dev') });
+    renderer = new THREE.WebGLRenderer({ canvas, antialias: false, powerPreference: 'high-performance', stencil: false, preserveDrawingBuffer: location.search.includes('dev') });
     renderer.outputColorSpace = THREE.SRGBColorSpace;
-    renderer.toneMapping = THREE.ACESFilmicToneMapping;
-    renderer.toneMappingExposure = 0.95;
+    // the scene renders linear HDR into an offscreen target; Post does tone mapping, bloom and grading
+    renderer.toneMapping = THREE.NoToneMapping;
     renderer.shadowMap.enabled = true;
     renderer.shadowMap.type = THREE.PCFSoftShadowMap;
     scene = new THREE.Scene();
@@ -24,9 +24,9 @@ const Render = (() => {
     scene.fog = fog;
     camera = new THREE.PerspectiveCamera(80, 1, 0.1, 2600);
     camera.rotation.order = 'YXZ';
-    hemi = new THREE.HemisphereLight(0xc4dcff, 0x4a4630, 1.0);
+    hemi = new THREE.HemisphereLight(0xc4dcff, 0x5a5236, 0.55);
     scene.add(hemi);
-    sun = new THREE.DirectionalLight(0xfff0d8, 2.4);
+    sun = new THREE.DirectionalLight(0xfff0d8, 2.6);
     sun.castShadow = true;
     sun.shadow.mapSize.set(2048, 2048);
     const sc = sun.shadow.camera;
@@ -34,6 +34,8 @@ const Render = (() => {
     sun.shadow.bias = -0.0005; sun.shadow.normalBias = 0.045;
     scene.add(sun); scene.add(sun.target);
     makeSky();
+    makeEnvironment();
+    Post.init(renderer);
     FX.init(scene);
     window.addEventListener('resize', resize);
     resize();
@@ -45,6 +47,8 @@ const Render = (() => {
     renderer.setSize(w, h, false);
     camera.aspect = w / h;
     camera.updateProjectionMatrix();
+    const v = renderer.getDrawingBufferSize(new THREE.Vector2());
+    Post.setSize(v.x, v.y, quality);
   }
   function setQuality(q, shadows) {
     quality = q;
@@ -61,10 +65,10 @@ const Render = (() => {
     const geo = new THREE.SphereGeometry(2400, 32, 16);
     const m = new THREE.ShaderMaterial({
       side: THREE.BackSide, depthWrite: false, fog: false,
-      uniforms: { sunDir: { value: SUN_DIR }, time: uTime, storm: { value: 0 } },
+      uniforms: { sunDir: { value: SUN_DIR }, time: uTime, storm: { value: 0 }, expo: { value: Post.uniforms.exposure } },
       vertexShader: `varying vec3 vDir; void main(){ vDir = normalize(position); vec4 p = modelViewMatrix * vec4(position,1.0); gl_Position = projectionMatrix * p; gl_Position.z = gl_Position.w; }`,
-      fragmentShader: `
-        uniform vec3 sunDir; uniform float time; uniform float storm; varying vec3 vDir;
+      fragmentShader: Post.GLSL + `
+        uniform vec3 sunDir; uniform float time; uniform float storm; uniform float expo; varying vec3 vDir;
         float h(vec2 p){ return fract(sin(dot(p, vec2(127.1,311.7)))*43758.5453); }
         float n(vec2 p){ vec2 i=floor(p), f=fract(p); f=f*f*(3.-2.*f); return mix(mix(h(i),h(i+vec2(1,0)),f.x), mix(h(i+vec2(0,1)),h(i+vec2(1,1)),f.x), f.y); }
         float fbm(vec2 p){ float s=0., a=.5; for(int i=0;i<5;i++){ s+=a*n(p); p*=2.03; a*=.5; } return s; }
@@ -76,7 +80,7 @@ const Render = (() => {
           col = mix(low, col, smoothstep(-0.05, 0.12, d.y));
           float sd = max(dot(d, sunDir), 0.);
           col += vec3(1.0,0.85,0.6) * pow(sd, 8.0) * 0.35;
-          col += vec3(1.0,0.95,0.85) * smoothstep(0.9975, 0.9992, sd) * 3.0;
+
           if (d.y > 0.0) {
             vec2 uv = d.xz / (d.y + 0.12) * 1.4 + vec2(time*0.004, time*0.002);
             float c = fbm(uv);
@@ -85,8 +89,12 @@ const Render = (() => {
             cc += vec3(1.0,0.9,0.7) * pow(sd, 4.0) * 0.3;
             col = mix(col, cc, c * 0.9);
           }
+          // melt into the fog colour at the horizon so the sea meets the sky without a seam
+          col = mix(col, vec3(0.75,0.84,0.93), smoothstep(0.1, -0.02, d.y) * 0.85);
           col = mix(col, vec3(0.42,0.24,0.62), storm * 0.55);
-          gl_FragColor = vec4(pow(col, vec3(1.0/2.2)), 1.0);
+          // the colours above are display values: undo the tone curve so they survive Post unchanged
+          vec3 lin = pow(clamp(col, 0.0, 0.9), vec3(2.2));
+          gl_FragColor = vec4(invTone(lin) / expo + vec3(1.0,0.95,0.85) * smoothstep(0.9975, 0.9994, sd) * 30.0 + vec3(1.0,0.85,0.6) * pow(sd, 64.0) * 1.5, 1.0);
         }`,
     });
     m.toneMapped = false;
@@ -95,7 +103,28 @@ const Render = (() => {
     scene.add(skyMesh);
   }
 
+  // image-based lighting from a simple sky dome, so metals and glossy parts reflect sky and ground
+  function makeEnvironment() {
+    const es = new THREE.Scene();
+    const m = new THREE.ShaderMaterial({
+      side: THREE.BackSide, uniforms: { sunDir: { value: SUN_DIR } },
+      vertexShader: 'varying vec3 vD; void main(){ vD = normalize(position); gl_Position = projectionMatrix * modelViewMatrix * vec4(position,1.0); }',
+      fragmentShader: `uniform vec3 sunDir; varying vec3 vD; void main(){
+        vec3 d = normalize(vD);
+        vec3 sky = mix(vec3(0.42,0.6,0.85), vec3(0.12,0.3,0.7), clamp(d.y,0.,1.));
+        vec3 gnd = mix(vec3(0.22,0.26,0.14), vec3(0.4,0.45,0.35), smoothstep(-0.4, 0.0, d.y));
+        vec3 c = d.y > 0.0 ? sky : gnd;
+        c += vec3(1.0,0.9,0.75) * pow(max(dot(d, sunDir), 0.0), 24.0) * 3.0;
+        gl_FragColor = vec4(c * 0.6, 1.0); }`,
+    });
+    es.add(new THREE.Mesh(new THREE.SphereGeometry(10, 32, 16), m));
+    const pm = new THREE.PMREMGenerator(renderer);
+    scene.environment = pm.fromScene(es, 0.02).texture;
+    pm.dispose();
+  }
+
   // ---------- world load ----------
+
   const worldGroup = new THREE.Group();
   let pieces = null, propR = null, grass = null;
   const lootMeshes = new Map(), chestMeshes = new Map(), aboxMeshes = new Map(), padMeshes = new Map();
@@ -129,9 +158,41 @@ const Render = (() => {
     grass = new Grass(worldGroup, world);
     buildStorm();
     if (world.bus) { blimpMesh = Models.blimp(); worldGroup.add(blimpMesh); }
+    buildClouds();
     ghost = new Ghost(worldGroup);
     editOverlay = new EditOverlay(worldGroup);
     for (const p of G.players.values()) avatarFor(p);
+  }
+
+  // big soft cloud billboards around skydiving height; they thin out as you pass through them
+  let clouds = [];
+  function buildClouds() {
+    clouds = [];
+    const R = U.rng(world.seed + 31);
+    const n = world.bus ? 46 : 14, spread = world.bus ? 520 : 400;
+    const tex = Tex.get('cloud');
+    for (let i = 0; i < n; i++) {
+      const a = R() * Math.PI * 2, r = Math.sqrt(R()) * spread;
+      const s = 70 + R() * 90;
+      const m = new THREE.SpriteMaterial({ map: tex, color: new THREE.Color().setHSL(0.6, 0.2, 0.94 + R() * 0.06), transparent: true, opacity: 0.9, depthWrite: false, fog: true, rotation: (R() - 0.5) * 0.3 });
+      const sp = new THREE.Sprite(m);
+      sp.position.set(Math.cos(a) * r, world.bus ? 150 + R() * 80 : 170 + R() * 60, Math.sin(a) * r);
+      sp.scale.set(s, s * (0.45 + R() * 0.2), 1);
+      sp.renderOrder = 2;
+      sp.userData = { s, base: 0.75 + R() * 0.2, drift: 0.6 + R() * 0.8 };
+      worldGroup.add(sp);
+      clouds.push(sp);
+    }
+  }
+  function updateClouds(dt) {
+    const cp = camera.position;
+    for (const c of clouds) {
+      c.position.x += c.userData.drift * dt;
+      if (c.position.x > 600) c.position.x -= 1200;
+      const d = c.position.distanceTo(cp), s = c.userData.s;
+      c.material.opacity = c.userData.base * U.clamp((d - s * 0.12) / (s * 0.45), 0, 1);
+      c.visible = c.material.opacity > 0.01;
+    }
   }
 
   function terrainColor(x, z, h, slope, N) {
@@ -230,14 +291,16 @@ const Render = (() => {
           float depth = clamp(-th, 0.0, 12.0);
           float dx = cos(vW.x*0.08 + time*1.1)*0.08*0.18 + cos((vW.x+vW.z)*0.05+time*0.6)*0.05*0.2 + sin(vW.x*0.9+time*2.0)*0.03;
           float dz = -sin(vW.z*0.11 - time*0.9)*0.11*0.14 + cos((vW.x+vW.z)*0.05+time*0.6)*0.05*0.2 + cos(vW.z*0.8-time*1.7)*0.03;
-          vec3 N = normalize(vec3(-dx*6.0, 1.0, -dz*6.0));
+          float camD = length(camPos - vW);
+          vec3 N = normalize(vec3(-dx*6.0, 1.0, -dz*6.0) * vec3(1.0 - smoothstep(40.0, 260.0, camD) * 0.85, 1.0, 1.0 - smoothstep(40.0, 260.0, camD) * 0.85));
           vec3 V = normalize(camPos - vW);
           float fres = pow(1.0 - max(dot(N, V), 0.0), 4.0);
           vec3 shallow = vec3(0.2,0.72,0.74), deep = vec3(0.03,0.22,0.42);
           vec3 col = mix(shallow, deep, smoothstep(0.0, 9.0, depth));
           col = mix(col, vec3(0.62,0.8,0.95), fres*0.6);
           vec3 H = normalize(sunDir + V);
-          col += vec3(1.0,0.95,0.85) * pow(max(dot(N,H),0.0), 180.0) * 2.0;
+          float farF = smoothstep(60.0, 300.0, camD);
+          col += vec3(1.0,0.95,0.85) * pow(max(dot(N,H),0.0), mix(180.0, 40.0, farF)) * mix(2.0, 0.5, farF);
           float foam = smoothstep(1.2, 0.0, depth) * (0.6 + 0.4*sin(time*2.0 + vW.x*0.6 + vW.z*0.4));
           col = mix(col, vec3(1.0), clamp(foam,0.0,1.0)*0.75);
           float alpha = mix(0.75, 0.96, smoothstep(0.0, 4.0, depth));
@@ -249,7 +312,7 @@ const Render = (() => {
           #include <colorspace_fragment>
         }`,
     });
-    const g = new THREE.PlaneGeometry(3200, 3200, 200, 200);
+    const g = new THREE.PlaneGeometry(5200, 5200, 220, 220);
     g.rotateX(-Math.PI / 2);
     waterMesh = new THREE.Mesh(g, m);
     waterMesh.position.y = WATER_Y - 0.25;
@@ -263,7 +326,7 @@ const Render = (() => {
       transparent: true, depthWrite: false, side: THREE.DoubleSide, fog: false,
       uniforms: { time: uTime, radius: { value: 100 } },
       vertexShader: `varying vec2 vUv; varying vec3 vW; void main(){ vUv = uv; vec4 w = modelMatrix*vec4(position,1.0); vW = w.xyz; gl_Position = projectionMatrix*viewMatrix*w; }`,
-      fragmentShader: `
+      fragmentShader: Post.GLSL + `
         uniform float time; uniform float radius; varying vec2 vUv; varying vec3 vW;
         float h(vec2 p){ return fract(sin(dot(p, vec2(127.1,311.7)))*43758.5453); }
         float n(vec2 p){ vec2 i=floor(p), f=fract(p); f=f*f*(3.-2.*f); return mix(mix(h(i),h(i+vec2(1,0)),f.x), mix(h(i+vec2(0,1)),h(i+vec2(1,1)),f.x), f.y); }
@@ -276,7 +339,7 @@ const Render = (() => {
           col += vec3(0.9,0.7,1.0) * streak * 0.6;
           float alpha = 0.22 + a*0.2 + streak*0.18;
           alpha *= smoothstep(0.0, 0.03, vUv.y);
-          gl_FragColor = vec4(col, alpha);
+          gl_FragColor = vec4(toLin(col) * 1.2, alpha);
         }`,
     });
     stormMesh = new THREE.Mesh(g, m);
@@ -784,77 +847,39 @@ const Render = (() => {
   function avatarFor(p) {
     let a = avatars.get(p.id);
     if (a) return a;
-    a = Models.avatar(p.skin);
-    a.held = ''; a.heldMesh = null;
+    a = Character.create(p.skin);
     if (p.human && p.id !== (window.LOCAL_ID || -1)) { a.tag = nameSprite(p.name); a.root.add(a.tag); }
     worldGroup.add(a.root);
     avatars.set(p.id, a);
     return a;
   }
+  const animState = { state: '', code: '', flags: 0, pitch: 0, yaw: 0, vx: 0, vz: 0, onGround: true, swim: false, swing: 1, fire: 0, time: 0, dive: 0 };
   function animateAvatar(p, a, dt, isLocal, hideLocal) {
     const r = a.root;
     const st = p.state;
-    r.visible = p.alive && st !== 'bus' && !(isLocal && hideLocal) && (Math.abs(p.rx - camera.position.x) < 320 && Math.abs(p.rz - camera.position.z) < 320);
+    const dx = p.rx - camera.position.x, dz = p.rz - camera.position.z;
+    r.visible = p.alive && st !== 'bus' && !(isLocal && hideLocal) && Math.abs(dx) < 320 && Math.abs(dz) < 320;
     if (!r.visible) return;
     r.position.set(p.rx, p.ry, p.rz);
     r.rotation.y = p.ryaw;
     // held item
     const code = st === 'ground' ? (p.flags & FL.BUILD ? 'build' : p.held || '') : '';
-    if (code !== a.held) {
-      if (a.heldMesh) a.gunMount.remove(a.heldMesh);
-      a.heldMesh = code && code !== 'build' ? heldModel(code) : null;
-      if (a.heldMesh) { if (code.startsWith('w:')) a.heldMesh.scale.setScalar(1.3); a.gunMount.add(a.heldMesh); }
-      a.held = code;
-    }
-    const sp = Math.hypot(p.rvx || 0, p.rvz || 0);
-    const moving = sp > 0.5 && p.onGroundR !== false;
-    a.walk += dt * (sp * 1.55);
-    const sw = moving ? Math.sin(a.walk) : 0;
-    const k = Math.min(1, dt * 12);
-    const L = (o, x, y = 0, z = 0) => { o.rotation.x += (x - o.rotation.x) * k; o.rotation.y += (y - o.rotation.y) * k; o.rotation.z += (z - o.rotation.z) * k; };
-    a.glider.visible = st === 'glide';
-    const pitch = p.rpitch || 0;
-    if (st === 'sky') {
-      L(a.hips, -1.25); L(a.legL, 0.3, 0, -0.35); L(a.legR, 0.3, 0, 0.35); L(a.armL, 0, 0, -1.9); L(a.armR, 0, 0, 1.9); L(a.torso, 0); L(a.head, 0.9);
-      r.position.y += 0.9;
-      return;
-    }
-    if (st === 'glide') {
-      L(a.hips, -0.15); L(a.legL, 0.15); L(a.legR, -0.1); L(a.armL, 0, 0, -2.6); L(a.armR, 0, 0, 2.6); L(a.torso, 0); L(a.head, 0);
-      return;
-    }
-    L(a.hips, 0);
-    const emote = p.flags & FL.EMOTE;
-    if (emote) {
-      const t = (G ? G.time : 0) * 6;
-      L(a.legL, Math.sin(t) * 0.4); L(a.legR, -Math.sin(t) * 0.4);
-      L(a.armL, Math.sin(t) * 0.5 - 2.6, 0, -0.4); L(a.armR, -Math.sin(t) * 0.5 - 2.6, 0, 0.4);
-      L(a.torso, 0, Math.sin(t * 0.5) * 0.6, Math.sin(t) * 0.15); L(a.head, 0, 0, Math.sin(t) * 0.2);
-      r.position.y += Math.abs(Math.sin(t)) * 0.15;
-      return;
-    }
-    const air = p.onGroundR === false;
-    L(a.legL, air ? -0.5 : sw * 0.75); L(a.legR, air ? 0.25 : -sw * 0.75);
-    const swing = p.swingT !== undefined && G ? U.clamp((G.time - p.swingT) / 0.35, 0, 1) : 1;
-    const firing = p.fireAnim || 0;
-    if (code === 'pick') {
-      const ph = swing < 1 ? Math.sin(swing * Math.PI) : 0;
-      L(a.armR, -0.9 - ph * 1.5 + pitch * 0.4, 0, 0.12); L(a.armL, -0.5 - ph * 0.8, 0.3, -0.1);
-      if (a.heldMesh) { a.heldMesh.rotation.set(-0.35 - ph * 1.9, 0, -0.15); a.heldMesh.position.set(-0.02, -0.12, 0.05); }
-    } else if (code === 'build' || p.flags & FL.EDIT) {
-      L(a.armR, -1.0 + pitch * 0.4, 0, 0.15); L(a.armL, -1.0 + pitch * 0.4, 0, -0.15);
-    } else if (code.startsWith('c:')) {
-      const heal = p.flags & FL.HEAL;
-      L(a.armR, heal ? -1.8 : -0.6, 0, 0.1); L(a.armL, heal ? -1.4 : sw * -0.6, 0, -0.1);
-      if (a.heldMesh) a.heldMesh.position.set(0, 0.05, 0.05);
-    } else if (code) {
-      const kick = firing * 0.25;
-      L(a.armR, -1.5 + pitch - kick, 0, 0.05); L(a.armL, -1.45 + pitch - kick, 0.55, 0);
-      if (a.heldMesh) { a.heldMesh.rotation.set(pitch * 0.9 + kick, 0, 0); a.heldMesh.position.set(0, 0.0, kick * 0.2); }
-    } else { L(a.armR, -sw * 0.6); L(a.armL, sw * 0.6); }
-    L(a.torso, -pitch * 0.25, 0, 0);
-    L(a.head, -pitch * 0.45);
-    if (p.fireAnim) p.fireAnim = Math.max(0, p.fireAnim - dt * 8);
+    if (code !== a.held) Character.setHeld(a, code, code && code !== 'build' ? heldModel(code) : null);
+    // far characters animate at a lower rate
+    const d2 = dx * dx + dz * dz;
+    const near = d2 < 65 * 65;
+    if (a.mesh.castShadow !== near) { a.mesh.castShadow = near; if (a.heldMesh) a.heldMesh.traverse(o => { if (o.isMesh) o.castShadow = near; }); }
+    const far = d2 > 110 * 110;
+    a.skipT = (a.skipT || 0) + dt;
+    if (far && a.skipT < 0.08) return;
+    const adt = a.skipT; a.skipT = 0;
+    const s = animState;
+    s.state = st; s.code = code; s.flags = p.flags || 0; s.pitch = p.rpitch || 0; s.yaw = p.ryaw;
+    s.vx = p.rvx || 0; s.vz = p.rvz || 0; s.onGround = p.onGroundR !== false; s.swim = !!(p.flags & FL.SWIM);
+    s.swing = p.swingT !== undefined && G ? U.clamp((G.time - p.swingT) / 0.35, 0, 1) : 1;
+    s.fire = p.fireAnim || 0; s.time = uTime.value; s.dive = p.dive || 0; s.vfwd = 0;
+    Character.animate(a, s, adt);
+    if (p.fireAnim) p.fireAnim = Math.max(0, p.fireAnim - adt * 8);
     if (a.tag) a.tag.visible = !!SETTINGS.showNames;
   }
 
@@ -888,7 +913,7 @@ const Render = (() => {
   // ---------- frame ----------
   function frame(dt, view) {
     uTime.value += dt;
-    if (!G) { renderer.render(scene, camera); return; }
+    if (!G) { Post.render(scene, camera, uTime.value); return; }
     const camP = camera.position;
     // sun & shadow follow camera target
     const focus = view.focus || camP;
@@ -917,10 +942,16 @@ const Render = (() => {
       const bp = G.busPos(Math.max(0, G.time - 3));
       const show = G.phase === 'bus' || (bp && bp.f < 1 && G.time < 60);
       blimpMesh.visible = !!show;
-      if (show && bp) { blimpMesh.position.set(bp.x, bp.y + 6, bp.z); blimpMesh.rotation.y = bp.yaw + Math.PI; blimpMesh.userData.prop.rotation.z += dt * 15; }
+      if (show && bp) {
+        blimpMesh.position.set(bp.x, bp.y + 6 + Math.sin(uTime.value * 0.6) * 0.6, bp.z);
+        blimpMesh.rotation.set(Math.sin(uTime.value * 0.45) * 0.015, bp.yaw, Math.sin(uTime.value * 0.5) * 0.02);
+        for (const pr of blimpMesh.userData.props) pr.rotation.z += dt * 18;
+      }
     }
     pieces.tick();
     propR.tick(dt);
+    updateClouds(dt);
+
     grass.update(focus.x, focus.z);
     // loot bob
     const t = uTime.value;
@@ -942,7 +973,8 @@ const Render = (() => {
       animateAvatar(p, a, dt, p.id === view.localId, view.hideLocal);
     }
     FX.update(dt, camera);
-    renderer.render(scene, camera);
+    Post.uniforms.storm = stormTint;
+    Post.render(scene, camera, uTime.value);
   }
 
   function project(v) {

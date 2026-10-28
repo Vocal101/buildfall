@@ -244,7 +244,7 @@ body:not(.in-menu) #menus { background: rgba(6,12,34,0.55); justify-content: cen
 #bottomleft { position: absolute; left: 18px; bottom: 18px; }
 #ammo-list { display: flex; flex-direction: column; gap: 3px; }
 #ammo-list div { display: flex; align-items: center; gap: 8px; font: 400 16px var(--head); background: rgba(10,16,40,0.5); padding: 2px 10px; border-radius: 6px; }
-#ammo-list i { width: 10px; height: 14px; border-radius: 2px; background: var(--ac); }
+#ammo-list .ammo-ic { width: 12px; height: 18px; filter: drop-shadow(0 1px 1px rgba(0,0,0,0.5)); }
 #bigmap { position: absolute; inset: 0; background: rgba(5,10,28,0.8); display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px; }
 #bigmap canvas { width: min(82vh, 90vw); height: min(82vh, 90vw); border-radius: 16px; box-shadow: 0 20px 60px rgba(0,0,0,0.6); }
 #bigmap .hint { color: var(--dim); }
@@ -260,3 +260,13 @@ body:not(.in-menu) #menus { background: rgba(6,12,34,0.55); justify-content: cen
   .skins { grid-template-columns: repeat(3, 1fr); }
   #menus { padding: 3vh 4vw; background: rgba(6,12,34,0.82); justify-content: center; }
 }
+/* skydive altimeter */
+#alt { position: absolute; right: 4.5%; top: 50%; transform: translateY(-50%); display: flex; flex-direction: column; align-items: center; gap: 8px; pointer-events: none; }
+#alt .track { position: relative; width: 10px; height: 260px; border-radius: 6px; background: linear-gradient(to top, rgba(255,90,60,0.55) 0%, rgba(255,200,80,0.35) 14%, rgba(255,255,255,0.18) 30%, rgba(255,255,255,0.08) 100%); box-shadow: 0 0 0 2px rgba(10,16,40,0.45); }
+#alt .mark { position: absolute; left: -8px; right: -8px; height: 3px; background: #ffd23a; border-radius: 2px; }
+#alt .mark span { position: absolute; right: 22px; top: -8px; font: 400 12px var(--head); color: #ffd23a; letter-spacing: 1px; }
+#alt .me { position: absolute; left: 50%; width: 22px; height: 22px; margin-left: -11px; margin-bottom: -11px; border-radius: 50%; background: #fff; box-shadow: 0 0 12px rgba(120,200,255,0.9), 0 0 0 3px #36a3ff; }
+#alt .lbl { font: 400 30px var(--head); text-shadow: 0 2px 6px rgba(0,0,0,0.6); }
+#alt .lbl small { font-size: 16px; margin-left: 2px; opacity: 0.8; }
+#alt .tip { font: 500 14px var(--body); text-align: center; max-width: 170px; text-shadow: 0 1px 4px rgba(0,0,0,0.8); }
+#alt .tip .k { display: inline-block; padding: 1px 7px; margin: 0 2px; border-radius: 5px; background: rgba(255,255,255,0.9); color: #0a1028; font: 400 13px var(--head); }

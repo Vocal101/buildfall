@@ -63,8 +63,157 @@ const FX = (() => {
 
   let add, norm;
   const tracers = [], flashes = [], falling = [], projMeshes = new Map();
-  let tracerGeo, tracerMat, light, lightT = 0, flashMat;
+  let tracerGeo, tracerMat, light, lightT = 0, flashMat, flameMat, flameGeo;
   const fallMats = [];
+  let streaks = null, casings = null;
+
+  // ---------- bullet streaks ----------
+  // Every visible bullet is a camera-facing ribbon textured with a painted tracer (hot white core, warm
+  // glow, bright tip). All of them are rebuilt into one dynamic mesh each frame: one draw call.
+  function tracerTexture() {
+    const W = 256, H = 64;
+    const c = document.createElement('canvas'); c.width = W; c.height = H;
+    const g = c.getContext('2d');
+    const img = g.createImageData(W, H), d = img.data;
+    for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
+      const u = x / (W - 1), v = (y - (H - 1) / 2) / ((H - 1) / 2);
+      const along = Math.pow(u, 1.7) * (u > 0.96 ? 1 - (u - 0.96) / 0.04 * 0.6 : 1);
+      const core = Math.exp(-v * v / 0.02), glow = Math.exp(-v * v / 0.22) * 0.55;
+      const tip = Math.exp(-((u - 0.93) * (u - 0.93) * 900 + v * v * 6)) * 1.2;
+      const a = Math.min(1, (core + glow) * along + tip);
+      const white = Math.min(1, core * 1.3 + tip);
+      const i = (y * W + x) * 4;
+      d[i] = 255; d[i + 1] = 200 + 55 * white; d[i + 2] = 130 + 125 * white; d[i + 3] = a * 255;
+    }
+    g.putImageData(img, 0, 0);
+    const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace;
+    return t;
+  }
+  class Streaks {
+    constructor(cap) {
+      this.cap = cap;
+      this.list = []; this.frame = [];
+      const g = new THREE.BufferGeometry();
+      this.pos = new Float32Array(cap * 4 * 3); this.col = new Float32Array(cap * 4 * 4);
+      const uv = new Float32Array(cap * 4 * 2), idx = new Uint32Array(cap * 6);
+      for (let i = 0; i < cap; i++) {
+        uv.set([0, 0, 0, 1, 1, 1, 1, 0], i * 8);
+        idx.set([i * 4, i * 4 + 1, i * 4 + 2, i * 4, i * 4 + 2, i * 4 + 3], i * 6);
+      }
+      g.setAttribute('position', new THREE.BufferAttribute(this.pos, 3).setUsage(THREE.DynamicDrawUsage));
+      g.setAttribute('color', new THREE.BufferAttribute(this.col, 4).setUsage(THREE.DynamicDrawUsage));
+      g.setAttribute('uv', new THREE.BufferAttribute(uv, 2));
+      g.setIndex(new THREE.BufferAttribute(idx, 1));
+      g.setDrawRange(0, 0);
+      const m = new THREE.ShaderMaterial({
+        transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, side: THREE.DoubleSide,
+        uniforms: { map: { value: tracerTexture() } },
+        vertexShader: 'attribute vec4 color; varying vec4 vC; varying vec2 vUv; void main(){ vC = color; vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }',
+        fragmentShader: 'uniform sampler2D map; varying vec4 vC; varying vec2 vUv; void main(){ vec4 t = texture2D(map, vUv); gl_FragColor = vec4(t.rgb * vC.rgb * 1.6, t.a * vC.a); }',
+      });
+      this.mesh = new THREE.Mesh(g, m);
+      this.mesh.frustumCulled = false; this.mesh.renderOrder = 9;
+      this.c = new THREE.Color();
+    }
+    // a bullet flying from o to e at `speed`, drawn as a streak `len` metres long
+    shoot(o, e, col, width, speed, len) {
+      const dx = e.x - o.x, dy = e.y - o.y, dz = e.z - o.z;
+      const L = Math.hypot(dx, dy, dz);
+      if (L < 0.4) return;
+      if (this.list.length > this.cap - 16) this.list.shift();
+      this.list.push({ o: { x: o.x, y: o.y, z: o.z }, d: { x: dx / L, y: dy / L, z: dz / L }, L, t: 0, col, width, speed, len });
+    }
+    // a streak for this frame only (projectile bullets)
+    once(tail, head, col, width, alpha = 1) { this.frame.push({ tail, head, col, width, alpha }); }
+    update(dt, cam) {
+      let n = 0;
+      const P = this.pos, C = this.col, cp = cam.position, c = this.c;
+      const quad = (tx, ty, tz, hx, hy, hz, w, col, a) => {
+        if (n >= this.cap) return;
+        let ax = hx - tx, ay = hy - ty, az = hz - tz;
+        const mx = (tx + hx) / 2 - cp.x, my = (ty + hy) / 2 - cp.y, mz = (tz + hz) / 2 - cp.z;
+        let sx = ay * mz - az * my, sy = az * mx - ax * mz, sz = ax * my - ay * mx;
+        const sl = Math.hypot(sx, sy, sz) || 1;
+        // widen slightly with distance so far tracers stay readable
+        const dist = Math.hypot(mx, my, mz);
+        const ww = w * (1 + Math.min(1.2, dist / 80)) / 2 / sl;
+        a *= U.clamp(1 - (dist - 140) / 260, 0.15, 1);
+        sx *= ww; sy *= ww; sz *= ww;
+        P.set([tx - sx, ty - sy, tz - sz, tx + sx, ty + sy, tz + sz, hx + sx, hy + sy, hz + sz, hx - sx, hy - sy, hz - sz], n * 12);
+        c.set(col);
+        for (let k = 0; k < 4; k++) C.set([c.r, c.g, c.b, a], n * 16 + k * 4);
+        n++;
+      };
+      let w = 0;
+      for (const s of this.list) {
+        s.t += dt;
+        const head = Math.min(s.L, s.t * s.speed), tail = Math.max(0, s.t * s.speed - s.len);
+        if (tail >= s.L) continue;
+        this.list[w++] = s;
+        const a = Math.min(1, s.t * 40) * (head >= s.L ? Math.max(0, 1 - (tail / s.L)) : 1);
+        quad(s.o.x + s.d.x * tail, s.o.y + s.d.y * tail, s.o.z + s.d.z * tail, s.o.x + s.d.x * head, s.o.y + s.d.y * head, s.o.z + s.d.z * head, s.width, s.col, a);
+      }
+      this.list.length = w;
+      for (const f of this.frame) quad(f.tail.x, f.tail.y, f.tail.z, f.head.x, f.head.y, f.head.z, f.width, f.col, f.alpha);
+      this.frame.length = 0;
+      const g = this.mesh.geometry;
+      g.setDrawRange(0, n * 6);
+      g.attributes.position.needsUpdate = true; g.attributes.color.needsUpdate = true;
+    }
+    clear() { this.list.length = 0; this.frame.length = 0; }
+  }
+
+  // ---------- spent casings ----------
+  class Casings {
+    constructor() {
+      const brass = new THREE.MeshStandardMaterial({ color: 0xd9a640, metalness: 0.85, roughness: 0.3 });
+      const red = new THREE.MeshStandardMaterial({ color: 0xc8302c, roughness: 0.45 });
+      const cg = new THREE.CylinderGeometry(0.0075, 0.0075, 0.034, 8);
+      const sg = new THREE.CylinderGeometry(0.013, 0.013, 0.05, 10);
+      this.kinds = { brass: this.mk(cg, brass), shell: this.mk(sg, red), big: this.mk(new THREE.CylinderGeometry(0.011, 0.011, 0.06, 8), brass) };
+      this.list = [];
+      this.m = new THREE.Matrix4(); this.q = new THREE.Quaternion(); this.v = new THREE.Vector3(); this.s = new THREE.Vector3(); this.ax = new THREE.Vector3();
+    }
+    mk(geo, mat) {
+      const im = new THREE.InstancedMesh(geo, mat, 64);
+      im.count = 0; im.frustumCulled = false; im.castShadow = false;
+      im.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
+      group.add(im);
+      return im;
+    }
+    spawn(p, r, kind, floorY) {
+      if (this.list.length > 150) this.list.shift();
+      const sp = 1.4 + Math.random() * 0.8;
+      this.list.push({ kind, x: p.x, y: p.y, z: p.z, vx: r.x * sp + (Math.random() - 0.5) * 0.6, vy: r.y * sp + 1.2 + Math.random(), vz: r.z * sp + (Math.random() - 0.5) * 0.6, ax: new THREE.Vector3(Math.random() - 0.5, Math.random() - 0.5, Math.random() - 0.5).normalize(), ang: 0, spin: 18 + Math.random() * 20, life: 2.2, floor: floorY, rest: false });
+    }
+    update(dt) {
+      const cnt = { brass: 0, shell: 0, big: 0 };
+      let w = 0;
+      for (const c of this.list) {
+        c.life -= dt;
+        if (c.life <= 0) continue;
+        this.list[w++] = c;
+        if (!c.rest) {
+          c.vy -= 14 * dt;
+          c.x += c.vx * dt; c.y += c.vy * dt; c.z += c.vz * dt;
+          c.ang += c.spin * dt;
+          if (c.y < c.floor + 0.01) {
+            c.y = c.floor + 0.01;
+            if (Math.abs(c.vy) < 1.2) { c.rest = true; c.ax.set(0, 0, 1); c.ang = Math.PI / 2; }
+            else { c.vy = -c.vy * 0.35; c.vx *= 0.5; c.vz *= 0.5; c.spin *= 0.5; if (Math.random() < 0.5) Sfx.play('casing', c); }
+          }
+        }
+        const im = this.kinds[c.kind], i = cnt[c.kind]++;
+        if (i >= 64) continue;
+        const sc = Math.min(1, c.life / 0.4);
+        this.m.compose(this.v.set(c.x, c.y, c.z), this.q.setFromAxisAngle(c.ax, c.ang), this.s.set(sc, sc, sc));
+        im.setMatrixAt(i, this.m);
+      }
+      this.list.length = w;
+      for (const k in this.kinds) { const im = this.kinds[k]; im.count = Math.min(64, cnt[k]); im.instanceMatrix.needsUpdate = true; }
+    }
+    clear() { this.list.length = 0; }
+  }
 
   function init(sc) {
     scene = sc;
@@ -76,11 +225,19 @@ const FX = (() => {
     tracerGeo = new THREE.BoxGeometry(1, 1, 1); tracerGeo.translate(0, 0, -0.5);
     tracerMat = new THREE.MeshBasicMaterial({ color: 0xffe9a8, transparent: true, opacity: 0.9, blending: THREE.AdditiveBlending, depthWrite: false, fog: false });
     flashMat = new THREE.SpriteMaterial({ map: Tex.get('flash'), color: 0xffe0a0, transparent: true, blending: THREE.AdditiveBlending, depthWrite: false, fog: false });
+    flameMat = new THREE.MeshBasicMaterial({ map: Tex.get('flame'), color: 0xffd090, transparent: true, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide, fog: false });
+    // two crossed quads along -Z: the flame that leaves the barrel
+    flameGeo = Models.merge([{ g: new THREE.PlaneGeometry(0.5, 1), m: Models.TRS(0, 0, -0.5, -Math.PI / 2, 0, 0) }, { g: new THREE.PlaneGeometry(0.5, 1), m: Models.TRS(0, 0, -0.5, -Math.PI / 2, 0, Math.PI / 2) }]);
+    streaks = new Streaks(400);
+    group.add(streaks.mesh);
+    casings = new Casings();
     light = new THREE.PointLight(0xffa040, 0, 30, 2);
     group.add(light);
   }
   function clear() {
     add.p.length = 0; norm.p.length = 0;
+    if (streaks) streaks.clear();
+    if (casings) casings.clear();
     for (const t of tracers) group.remove(t.m);
     for (const f of flashes) group.remove(f.m);
     for (const f of falling) group.remove(f.m);
@@ -88,27 +245,41 @@ const FX = (() => {
     tracers.length = 0; flashes.length = 0; falling.length = 0; projMeshes.clear();
   }
 
-  function tracer(o, e, col = 0xffe9a8, width = 0.035, life = 0.09) {
-    const dx = e.x - o.x, dy = e.y - o.y, dz = e.z - o.z;
-    const len = Math.hypot(dx, dy, dz);
-    if (len < 0.5) return;
-    const m = new THREE.Mesh(tracerGeo, tracerMat.clone());
-    m.material.color.set(col);
-    m.position.set(o.x, o.y, o.z);
-    m.lookAt(o.x - dx, o.y - dy, o.z - dz);
-    m.scale.set(width, width, len);
-    group.add(m);
-    tracers.push({ m, life, max: life });
+  // a bullet: a streak that flies from the muzzle to where the shot landed
+  function tracer(o, e, col = 0xffe9a8, width = 0.05, pellet = false) {
+    streaks.shoot(o, e, col, pellet ? width * 0.8 : width, pellet ? 330 : 430, pellet ? 3.5 : 9);
   }
-  function muzzle(p, size = 0.7) {
+  function muzzle(p, size = 0.7, dir) {
     const s = new THREE.Sprite(flashMat.clone());
     s.position.set(p.x, p.y, p.z);
     s.scale.set(size, size, 1);
     s.material.rotation = Math.random() * 6.28;
     group.add(s);
     flashes.push({ m: s, life: 0.05, max: 0.05 });
+    if (dir) {
+      const f = new THREE.Mesh(flameGeo, flameMat.clone());
+      f.position.set(p.x, p.y, p.z);
+      f.lookAt(p.x - dir.x, p.y - dir.y, p.z - dir.z);
+      f.rotateZ(Math.random() * 6.28);
+      const l = size * (0.8 + Math.random() * 0.4);
+      f.scale.set(l, l, l * 1.2);
+      group.add(f);
+      flashes.push({ m: f, life: 0.045, max: 0.045 });
+    }
+    for (let i = 0; i < 3; i++) add.add({ x: p.x, y: p.y, z: p.z, vx: (dir ? dir.x * 6 : 0) + (Math.random() - 0.5) * 3, vy: (dir ? dir.y * 6 : 0) + Math.random() * 2, vz: (dir ? dir.z * 6 : 0) + (Math.random() - 0.5) * 3, life: 0.14, size: 0.05, g: 6, c: 0xffd080 });
+    norm.add({ x: p.x, y: p.y, z: p.z, vx: dir ? dir.x * 1.5 : 0, vy: 0.6, vz: dir ? dir.z * 1.5 : 0, life: 0.7, size: 0.18, grow: 0.9, drag: 2, c: 0xd0d0d0, a: 0.25, fade: 'in-out' });
     flashLight(p, 6, 0.06);
   }
+  // rushing-air streaks around the camera while skydiving
+  function wind(cam, speed, dt) {
+    const n = Math.min(6, Math.floor(speed * dt * 4 + Math.random()));
+    for (let i = 0; i < n; i++) {
+      const a = Math.random() * 6.28, r = 2.5 + Math.random() * 7;
+      const x = cam.x + Math.cos(a) * r, z = cam.z + Math.sin(a) * r, y = cam.y - 4 - Math.random() * 10;
+      streaks.shoot({ x, y, z }, { x, y: y + 2.5 + speed * 0.06, z }, 0xcfe4ff, 0.035, speed * 2.2, 3.5);
+    }
+  }
+  function casing(p, r, kind, floorY) { if (casings) casings.spawn(p, r, kind, floorY); }
   function flashLight(p, intensity, t) {
     light.position.set(p.x, p.y, p.z);
     light.intensity = Math.max(light.intensity, intensity);
@@ -225,12 +396,16 @@ const FX = (() => {
       let m = projMeshes.get(pr.id);
       if (!m) {
         m = new THREE.Group();
-        if (pr.kind === 'rocket') {
+        if (pr.kind === 'bullet' && sp > 0.5) {
+        const back = Math.min(8, 1 + (pr.age || 0) * sp * 0.5);
+        streaks.once({ x: pr.x - pr.vx / sp * back, y: pr.y - pr.vy / sp * back, z: pr.z - pr.vz / sp * back }, { x: pr.x, y: pr.y, z: pr.z }, 0xffe2a8, 0.09);
+      }
+      if (pr.kind === 'rocket') {
           const b = new THREE.Mesh(new THREE.CylinderGeometry(0.07, 0.07, 0.6, 8), Models.mat(0x556070));
           b.rotation.x = Math.PI / 2; m.add(b);
           const tip = new THREE.Mesh(new THREE.ConeGeometry(0.07, 0.2, 8), Models.mat(0xff4030)); tip.rotation.x = -Math.PI / 2; tip.position.z = -0.4; m.add(tip);
         } else if (pr.kind === 'bullet') {
-          const b = new THREE.Mesh(tracerGeo, tracerMat.clone()); b.scale.set(0.05, 0.05, 3); b.material.color.set(0xfff2c0); m.add(b);
+          // drawn by the streak batch below
         } else {
           const b = new THREE.Mesh(new THREE.SphereGeometry(pr.kind === 'gl' ? 0.1 : 0.12, 10, 8), Models.mat(pr.kind === 'gl' ? 0x3a3f46 : 0x4d6b2f)); m.add(b);
         }
@@ -253,6 +428,8 @@ const FX = (() => {
     add.mesh.material.uniforms.scale.value = window.innerHeight * 0.9;
     norm.mesh.material.uniforms.scale.value = window.innerHeight * 0.9;
     add.update(dt); norm.update(dt);
+    streaks.update(dt, cam);
+    casings.update(dt);
     for (let i = tracers.length - 1; i >= 0; i--) {
       const t = tracers[i];
       t.life -= dt;
@@ -276,5 +453,6 @@ const FX = (() => {
     if (lightT > 0) { lightT -= dt; light.intensity *= Math.pow(0.0001, dt); if (lightT <= 0) light.intensity = 0; }
   }
 
-  return { init, clear, update, tracer, muzzle, impact, harvest, weakPoint, debris, propBreak, explosion, sparkle, dust, heal, stormSpecks, syncProjectiles, flashLight, get add() { return add; }, get norm() { return norm; } };
+  return { init, clear, update, tracer, muzzle, casing, wind, impact,
+ harvest, weakPoint, debris, propBreak, explosion, sparkle, dust, heal, stormSpecks, syncProjectiles, flashLight, get add() { return add; }, get norm() { return norm; } };
 })();

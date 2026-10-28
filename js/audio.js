@@ -154,6 +154,7 @@ const Sfx = (() => {
       case 'alert': d = out(null, 0.35); [660, 880, 660].forEach((f, i) => tone(d, t + i * 0.15, 0.13, f, f, 'square', 0.12)); break;
       case 'count': d = out(null, 0.3); tone(d, t, 0.15, opt.go ? 1320 : 880, opt.go ? 1320 : 880, 'triangle', 0.4); break;
       case 'whiz': d = out(null, 0.2); noise(d, t, 0.12, 3000, 800, 4, 'bandpass', 0.5, 0.02); break;
+      case 'casing': d = out(pos, 0.05, 12); if (!d) return; tone(d, t, 0.06, 4200 + Math.random() * 900, 3800, 'triangle', 0.25); tone(d, t + 0.05, 0.04, 5100, 4600, 'triangle', 0.12); break;
       case 'impact': d = out(pos, 0.15, 25); if (!d) return; noise(d, t, 0.05, 2500, 900, 2, 'bandpass', 0.5); break;
     }
   }

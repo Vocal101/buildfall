@@ -4,7 +4,8 @@
 const PH = {
   R: 0.36, H: 1.85, EYE: 1.62, STEP: 0.55,
   G: 22, JUMP: 7.4, RUN: 6.0, SPRINT: 7.9, ADS: 3.4, BACK: 0.85, AIRCTL: 0.55,
-  SKY_FALL: 30, SKY_DIVE: 46, SKY_H: 16, GLIDE_FALL: 6.5, GLIDE_H: 15, AUTO_GLIDE: 55,
+  // skydiving: free fall until AUTO_GLIDE metres above whatever is below, then the glider opens by itself
+  SKY_FALL: 34, SKY_DIVE: 58, SKY_H: 17, SKY_DIVE_H: 24, GLIDE_FALL: 6.5, GLIDE_H: 15, AUTO_GLIDE: 45, REDEPLOY: 20,
   SWIM: 3.2,
 };
 
@@ -194,26 +195,35 @@ const Phys = (() => {
     const T = G.T;
 
     if (p.state === 'sky' || p.state === 'glide') {
-      const gnd = T.h(p.x, p.z);
       const sky = p.state === 'sky';
-      const hs = sky ? PH.SKY_H : PH.GLIDE_H;
+      p.airT = (p.airT || 0) + dt;
+      const dive = sky && mz > 0.3;
+      p.dive = U.lerp(p.dive || 0, dive ? 1 : 0, Math.min(1, dt * 3));
+      const hs = sky ? U.lerp(PH.SKY_H, PH.SKY_DIVE_H, p.dive) : PH.GLIDE_H;
       const tvx = wx * hs, tvz = wz * hs;
       const k = Math.min(1, dt * (sky ? 2.2 : 1.6));
       p.vx += (tvx - p.vx) * k; p.vz += (tvz - p.vz) * k;
-      let fall = sky ? (mz > 0.3 ? PH.SKY_DIVE : PH.SKY_FALL) : PH.GLIDE_FALL;
+      let fall = sky ? (dive ? PH.SKY_DIVE : PH.SKY_FALL) : PH.GLIDE_FALL;
       if (!sky && mz < -0.3) fall *= 0.8;
-      p.vy += (-fall - p.vy) * Math.min(1, dt * 3);
+      p.vy += (-fall - p.vy) * Math.min(1, dt * (sky ? 1.6 : 3));
       const C = gather(G, p.x, p.z, 4);
       p.x += p.vx * dt; p.z += p.vz * dt; p.y += p.vy * dt;
       const lim = G.T.half - 5;
       p.x = U.clamp(p.x, -lim, lim); p.z = U.clamp(p.z, -lim, lim);
-      if (sky && (p.y - gnd < PH.AUTO_GLIDE || (inp.jump && p.y - gnd < 220))) { p.state = 'glide'; out.glide = true; }
       const g = groundAt(G, C, p.x, p.z, p.y + 1.5, PH.R);
+      const surf = Math.max(g.y, Math.max(T.h(p.x, p.z), WATER_Y));
+      p.alt = p.y - surf;
+      // the glider opens on a fresh press of jump (not one held over from leaving the blimp), or by itself low down
+      if (sky && (p.alt < PH.AUTO_GLIDE || (inp.jumpP && p.airT > 0.5))) { p.state = 'glide'; p.airT = 0; out.glide = true; }
+      else if (!sky && inp.jumpP && p.airT > 0.5 && p.alt > PH.AUTO_GLIDE + PH.REDEPLOY) { p.state = 'sky'; p.airT = 0; out.unglide = true; }
       if (p.y <= g.y) {
-        p.y = g.y; p.vy = 0; p.state = 'ground'; p.onGround = true; p.peakY = p.y; out.landed = true;
+        // hitting something while still in free fall hurts
+        if (p.state === 'sky' && -p.vy > 14) out.fall = Math.round((-p.vy - 14) * 3.2);
+        p.y = g.y; p.vy = 0; p.state = 'ground'; p.onGround = true; p.peakY = p.y; out.landed = true; p.dive = 0;
       }
       return out;
     }
+
 
     // ---- on foot ----
     const swim = p.y < WATER_Y - 1.1 && T.h(p.x, p.z) < WATER_Y - 1.1;
