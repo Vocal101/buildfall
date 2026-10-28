@@ -1,0 +1,88 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Buildfall</title>
+<meta name="description" content="Buildfall: a 3D battle royale and 1v1 build-fight game in the browser, with online play.">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%232f6fd6'/%3E%3Cpath d='M14 46V22l18-10 18 10v24H38V32H26v14z' fill='%23ffc53d'/%3E%3C/svg%3E">
+<link rel="stylesheet" href="styles.css">
+</head>
+<body class="in-menu">
+<canvas id="game"></canvas>
+
+<div id="hud" class="hidden">
+  <div id="vignette"></div>
+  <div id="scope" class="hidden"><div class="ring"></div></div>
+  <div id="crosshair"><i class="t"></i><i class="b"></i><i class="l"></i><i class="r"></i><i class="c"></i></div>
+  <div id="hitmarker"><i></i><i></i><i></i><i></i></div>
+  <div id="hurt-dirs"></div>
+  <div id="dmgnums"></div>
+
+  <div id="topright">
+    <canvas id="minimap" width="220" height="220"></canvas>
+    <div id="storm-info"></div>
+    <div id="counters"><span class="alive"><i class="ic-person"></i><b id="alive"></b></span><span class="kills"><i class="ic-skull"></i><b id="kills">0</b></span></div>
+  </div>
+  <div id="killfeed"></div>
+  <div id="toasts"></div>
+  <div id="center-msg"></div>
+  <div id="storm-warn" class="hidden"></div>
+  <div id="spectate" class="hidden"></div>
+  <div id="piece-hp" class="hidden"><div class="bar"><i></i></div><span></span></div>
+  <div id="interact" class="hidden"></div>
+  <div id="progress" class="hidden"><div class="lbl"></div><div class="bar"><i></i></div></div>
+  <div id="edit-hint" class="hidden"></div>
+
+  <div id="bottomleft">
+    <div id="ammo-list"></div>
+  </div>
+  <div id="vitals">
+    <div class="bar sh"><div id="sh-ghost" class="ghost"></div><div id="sh-fill" class="fill"></div><span id="sh-num">0</span><em class="ico">⛨</em></div>
+    <div class="bar hp"><div id="hp-ghost" class="ghost"></div><div id="hp-fill" class="fill"></div><span id="hp-num">100</span><em class="ico">✚</em></div>
+  </div>
+  <div id="bottomright">
+    <div id="ammo-readout" class="hidden"><div class="wname"></div><div><span class="mag"></span><span class="res"></span></div></div>
+    <div id="buildbar" class="hidden">
+      <div class="bp"><svg viewBox="0 0 40 40"><rect x="6" y="6" width="28" height="28" fill="none" stroke="currentColor" stroke-width="4"/></svg><span class="key"></span></div>
+      <div class="bp"><svg viewBox="0 0 40 40"><path d="M4 26 20 18 36 26 20 34z" fill="none" stroke="currentColor" stroke-width="4"/></svg><span class="key"></span></div>
+      <div class="bp"><svg viewBox="0 0 40 40"><path d="M6 34h8v-7h7v-7h7v-7h7V6" fill="none" stroke="currentColor" stroke-width="4"/></svg><span class="key"></span></div>
+      <div class="bp"><svg viewBox="0 0 40 40"><path d="M4 30 20 10 36 30z" fill="none" stroke="currentColor" stroke-width="4"/></svg><span class="key"></span></div>
+    </div>
+    <div id="hotbar"></div>
+  </div>
+  <div id="mats">
+    <div class="mat wood"><i></i><b>0</b></div>
+    <div class="mat brick"><i></i><b>0</b></div>
+    <div class="mat metal"><i></i><b>0</b></div>
+  </div>
+  <div id="bigmap" class="hidden"><canvas id="bigmap-canvas" width="760" height="760"></canvas><div class="hint">Press M to close</div></div>
+  <div id="fps" class="hidden"></div>
+</div>
+
+<div id="menus"></div>
+<div id="banner" class="hidden"></div>
+<noscript><div class="noscript">Buildfall needs JavaScript to run.</div></noscript>
+
+<script src="lib/three.min.js"></script>
+<script src="lib/peerjs.min.js"></script>
+<script src="js/util.js"></script>
+<script src="js/config.js"></script>
+<script src="js/world.js"></script>
+<script src="js/build.js"></script>
+<script src="js/physics.js"></script>
+<script src="js/game.js"></script>
+<script src="js/sim.js"></script>
+<script src="js/bots.js"></script>
+<script src="js/net.js"></script>
+<script src="js/input.js"></script>
+<script src="js/audio.js"></script>
+<script src="js/textures.js"></script>
+<script src="js/models.js"></script>
+<script src="js/fx.js"></script>
+<script src="js/render.js"></script>
+<script src="js/hud.js"></script>
+<script src="js/menus.js"></script>
+<script src="js/main.js"></script>
+</body>
+</html>

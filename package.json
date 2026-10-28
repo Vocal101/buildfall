@@ -1,0 +1,10 @@
+{
+  "name": "buildfall",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Browser battle royale and 1v1 build-fight game with online play",
+  "scripts": {
+    "test": "node tests/sim.test.js",
+    "dev": "python scripts/devserver.py"
+  }
+}
